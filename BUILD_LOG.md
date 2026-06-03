@@ -684,9 +684,9 @@ seed-exercises           ONE-OFF Ingest free-exercise-db JSON into exercises tab
 
 | # | Question | Status | Decision |
 |---|---|---|---|
-| 1 | Call 1 — pure math vs AI? | Open | Leaning pure math (deterministic, free). AI only if we want natural-language goal framing |
+| 1 | Call 1 — pure math vs AI? | **Decided** | Pure math in Next.js API route. No AI token cost. |
 | 2 | Barcode scanner library — `@zxing/library` vs `html5-qrcode`? | Open | `@zxing/library` more actively maintained; test both |
-| 3 | Charts library — Recharts vs Chart.js vs Tremor? | Open | Recharts likely (React-native, good SSR support) |
+| 3 | Charts library | **Decided** | Recharts. React-native, composable, no wrapper overhead. |
 | 4 | Carb cycling — hard default or user opt-in? | Open | Recommend default on, user can disable in settings |
 | 5 | PWA vs React Native — future mobile? | Open | PWA first; RN only if PWA has blockers (camera, push) on iOS |
 | 6 | Program seeding — manual JSON vs admin UI? | Open | Start with JSON seed file in `/scripts/seed-programs.ts` |
@@ -698,3 +698,59 @@ seed-exercises           ONE-OFF Ingest free-exercise-db JSON into exercises tab
 ---
 
 *This document should be committed to the repo root as `BUILD_LOG.md` and updated at the close of each phase.*
+
+---
+
+## 11. Decisions log
+
+| Date | Decision |
+|---|---|
+| 2026-06-03 | Call 1 — pure math, no AI |
+| 2026-06-03 | Charts — Recharts |
+| 2026-06-03 | Workout session UI — custom React state, no library |
+| 2026-06-03 | Rest timer — custom `useRestTimer` hook |
+| 2026-06-03 | Drag-to-reorder in program builder — `@dnd-kit/core` |
+| 2026-06-03 | Exercise library — Option C: standalone `/exercises` page + inline picker modal, same component both surfaces |
+| 2026-06-03 | Program builder uses same `ExercisePickerModal` component as library and active session |
+| 2026-06-03 | Exercise data — `free-exercise-db` seed (name, muscles, equipment, instructions, GIF URLs) |
+
+---
+
+## 12. Component architecture notes
+
+### ExerciseLibrary shared component
+
+```
+ExerciseLibrary
+  props:
+    mode: 'browse' | 'pick-multi' | 'pick-single'
+    onSelect?: (exercises: Exercise[]) => void
+    preSelected?: string[]   // exercise IDs already in program
+
+  surfaces:
+    /exercises page          mode='browse'     — full page, detail drawer on tap
+    ProgramBuilder           mode='pick-multi' — modal, multi-select, confirm button
+    ActiveSession            mode='pick-single'— modal, single-select, immediate add
+```
+
+**Shared primitives used on all three surfaces:**
+- `useExercises(filters)` — Supabase FTS query hook
+- `ExerciseCard` — name, primary muscle badge, equipment tag, GIF thumbnail
+- `ExerciseFilters` — muscle group + equipment filter pills
+- `ExerciseSearchBar` — debounced name search
+
+**Surface-specific additions:**
+- `/exercises` only: `ExerciseDetailDrawer` (full instructions, muscle diagram, favourite toggle)
+- Picker mode only: selected count badge, confirm/cancel footer, "recently used" section at top
+- `pick-multi` only: checkboxes on cards
+- `pick-single` only: tap card = immediate select + close
+
+### Additional shared components (workout module)
+
+```
+useRestTimer(defaultSeconds)   — countdown hook, plays sound on 0
+useOneRM(weight, reps)         — Epley formula: weight × (1 + reps/30)
+SetRow                         — single set: reps input, weight input, complete toggle
+SessionExerciseBlock           — exercise header + list of SetRows + add set button
+ActiveSessionScreen            — ordered list of SessionExerciseBlocks + rest timer overlay
+```
