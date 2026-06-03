@@ -1,0 +1,5 @@
+[functions.weekly-checkin]
+verify_jwt = false
+
+[functions.weekly-checkin.cron]
+schedule = "0 20 * * 0"   # Every Sunday at 20:00 UTC
