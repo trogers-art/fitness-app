@@ -8,15 +8,23 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const { data: profile } = await supabase
+  // Select only guaranteed columns — theme falls back to default if column missing
+  const { data: profile, error } = await supabase
     .from('user_profiles')
-    .select('id, theme')
+    .select('id, goal')
     .eq('user_id', user.id)
     .single()
 
-  if (!profile) redirect('/onboarding')
+  if (error || !profile) redirect('/onboarding')
 
-  const theme = (profile.theme ?? 'default') as 'default' | 'dark' | 'light'
+  // Theme fetched separately so a missing column doesn't break the layout check
+  const { data: themeRow } = await supabase
+    .from('user_profiles')
+    .select('theme')
+    .eq('user_id', user.id)
+    .single()
+
+  const theme = ((themeRow?.theme) ?? 'default') as 'default' | 'dark' | 'light'
 
   return (
     <>
