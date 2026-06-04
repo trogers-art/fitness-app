@@ -70,7 +70,7 @@ async function seed() {
   console.log('Fetching exercise database...')
   const res = await fetch(EXERCISE_DB_URL)
   if (!res.ok) throw new Error(`Failed to fetch: ${res.statusText}`)
-  const exercises: RawExercise[] = await res.json()
+  const exercises = await res.json() as RawExercise[]
   console.log(`Fetched ${exercises.length} exercises`)
 
   // Check existing count
