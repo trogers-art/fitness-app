@@ -13,6 +13,7 @@ interface FoodResult {
   protein_per_100g: number
   carbs_per_100g: number
   fat_per_100g: number
+  serving_size_g?: number | null
 }
 
 interface Props {
@@ -152,7 +153,7 @@ export default function AddFood({ mealType, mealLabel, onClose, onAdded }: Props
               {results.length > 0 && !selected && (
                 <div style={{ border: '1px solid var(--border)' }}>
                   {results.map((food, i) => (
-                    <button key={i} onClick={() => { setSelected(food); setQuery(food.name) }}
+                    <button key={i} onClick={() => { setSelected(food); setQuery(food.name); setQty(String(food.serving_size_g && food.serving_size_g > 0 ? food.serving_size_g : 100)) }}
                       style={{ width: '100%', textAlign: 'left', padding: '10px 12px', background: 'none', border: 'none', borderBottom: i < results.length - 1 ? '1px solid var(--border)' : 'none', cursor: 'pointer', fontFamily: 'DM Sans, sans-serif' }}
                       onMouseEnter={e => (e.currentTarget.style.background = 'var(--surface-2)')}
                       onMouseLeave={e => (e.currentTarget.style.background = 'none')}>
@@ -187,6 +188,19 @@ export default function AddFood({ mealType, mealLabel, onClose, onAdded }: Props
                   <div>
                     <label style={S.lbl}>Quick select</label>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                      {/* Actual serving size first if available */}
+                      {selected?.serving_size_g && selected.serving_size_g > 0 && (
+                        <button onClick={() => setQty(String(selected.serving_size_g))}
+                          style={{
+                            padding: '5px 10px', fontSize: 11, border: '1px solid',
+                            borderColor: qty === String(selected.serving_size_g) ? 'var(--text)' : 'var(--accent, #1a1c1e)',
+                            background: qty === String(selected.serving_size_g) ? 'var(--btn-bg)' : 'transparent',
+                            color: qty === String(selected.serving_size_g) ? 'var(--btn-fg)' : 'var(--text)',
+                            cursor: 'pointer', fontFamily: 'DM Sans, sans-serif', fontWeight: 500,
+                          }}>
+                          1 serving ({selected.serving_size_g}g)
+                        </button>
+                      )}
                       {SERVING_PRESETS.map(p => (
                         <button key={p.label} onClick={() => setQty(String(p.g))}
                           style={{
