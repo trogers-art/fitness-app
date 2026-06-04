@@ -2,45 +2,109 @@
 @tailwind components;
 @tailwind utilities;
 
-@layer base {
-  :root {
-    --color-brand: 22 163 74;
-  }
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=DM+Mono:wght@400;500&display=swap');
 
-  * {
-    -webkit-tap-highlight-color: transparent;
-  }
-
-  html {
-    scroll-behavior: smooth;
-  }
-
-  /* Prevent layout shift on scrollbar appear */
-  body {
-    overflow-y: scroll;
-  }
+:root {
+  /* Balanced dark — charcoal/slate, not pitch black */
+  --bg:        #161718;
+  --surface:   #1e2022;
+  --surface-2: #26292c;
+  --surface-3: #2e3236;
+  --border:    #2e3236;
+  --border-2:  #383d42;
+  --text:      #eceef0;
+  --text-2:    #8b9199;
+  --text-3:    #4d5460;
+  --accent:    #00e87a;
+  --accent-dim:#00c066;
+  --red:       #f04444;
+  --amber:     #f5a623;
+  --blue:      #4a90d9;
 }
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html {
+  scroll-behavior: smooth;
+  background: var(--bg);
+}
+
+body {
+  background: var(--bg) !important;
+  color: var(--text);
+  font-family: 'DM Sans', system-ui, sans-serif;
+  overflow-y: scroll;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Force dark on everything */
+#__next, main { background: var(--bg); }
 
 @layer components {
   .btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed active:scale-95;
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium transition-all duration-150 disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.98];
+    border-radius: 0;
   }
   .btn-primary {
-    @apply btn bg-brand-600 text-white hover:bg-brand-700;
+    background: var(--accent);
+    color: #000;
+    font-weight: 600;
   }
-  .btn-secondary {
-    @apply btn bg-white text-gray-700 border border-gray-200 hover:bg-gray-50;
-  }
+  .btn-primary:hover { background: var(--accent-dim); }
+
   .btn-ghost {
-    @apply btn text-gray-600 hover:bg-gray-100;
+    color: var(--text-2);
   }
+  .btn-ghost:hover {
+    color: var(--text);
+    background: var(--surface-2);
+  }
+  .btn-danger { color: var(--red); }
+  .btn-danger:hover { background: var(--surface-2); }
+
   .input {
-    @apply w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm placeholder:text-gray-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20 transition-all;
+    @apply w-full px-4 py-3 text-sm transition-colors;
+    background: var(--surface-2);
+    border: 1px solid var(--border-2);
+    color: var(--text);
+    border-radius: 0;
+    font-family: 'DM Mono', monospace;
+    outline: none;
   }
+  .input::placeholder { color: var(--text-3); }
+  .input:focus { border-color: var(--accent); }
+
   .card {
-    @apply bg-white rounded-2xl border border-gray-100 shadow-sm;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 0;
   }
+
   .label {
-    @apply block text-sm font-medium text-gray-700 mb-1.5;
+    display: block;
+    font-size: 10px;
+    font-weight: 500;
+    color: var(--text-3);
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    margin-bottom: 8px;
   }
+
+  .tag {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    font-size: 11px;
+    font-weight: 500;
+    border: 1px solid;
+    border-radius: 0;
+  }
+  .tag-green  { border-color: var(--accent); color: var(--accent); background: #00e87a12; }
+  .tag-red    { border-color: var(--red);    color: var(--red);    background: #f0444412; }
+  .tag-amber  { border-color: var(--amber);  color: var(--amber);  background: #f5a62312; }
+  .tag-muted  { border-color: var(--border-2); color: var(--text-2); }
 }

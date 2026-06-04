@@ -15,32 +15,32 @@ const NAV = [
 ]
 
 function GridIcon() {
-  return <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="1" y="1" width="6" height="6" stroke="currentColor" strokeWidth="1.5"/><rect x="9" y="1" width="6" height="6" stroke="currentColor" strokeWidth="1.5"/><rect x="1" y="9" width="6" height="6" stroke="currentColor" strokeWidth="1.5"/><rect x="9" y="9" width="6" height="6" stroke="currentColor" strokeWidth="1.5"/></svg>
+  return <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><rect x="1" y="1" width="5.5" height="5.5" stroke="currentColor" strokeWidth="1.25"/><rect x="8.5" y="1" width="5.5" height="5.5" stroke="currentColor" strokeWidth="1.25"/><rect x="1" y="8.5" width="5.5" height="5.5" stroke="currentColor" strokeWidth="1.25"/><rect x="8.5" y="8.5" width="5.5" height="5.5" stroke="currentColor" strokeWidth="1.25"/></svg>
 }
 function FoodIcon() {
-  return <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 2v4a3 3 0 006 0V2M6 2v12M13 2c0 0 0 4-2 5v7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="square"/></svg>
+  return <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><path d="M3 1.5v4a3 3 0 006 0v-4M6 1.5v11M12.5 1.5c0 0 0 4-2 5v6" stroke="currentColor" strokeWidth="1.25" strokeLinecap="square"/></svg>
 }
 function WorkoutIcon() {
-  return <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M1 8h2m10 0h2M3 8h10M3 6v4M13 6v4M5 7V5M11 7V5M5 11V9M11 11V9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="square"/></svg>
+  return <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><path d="M1 7.5h1.5m10 0H14m-11.5 0h9M2.5 5.5v4M12.5 5.5v4M4.5 6.5v-2M10.5 6.5v-2M4.5 10.5v-2M10.5 10.5v-2" stroke="currentColor" strokeWidth="1.25" strokeLinecap="square"/></svg>
 }
 function ExerciseIcon() {
-  return <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 2v12M2 5l6 3 6-3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="square" strokeLinejoin="miter"/></svg>
+  return <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><path d="M7.5 1.5v12M1.5 4.5l6 3 6-3" stroke="currentColor" strokeWidth="1.25" strokeLinecap="square" strokeLinejoin="miter"/></svg>
 }
 function BodyIcon() {
-  return <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="3.5" r="1.5" stroke="currentColor" strokeWidth="1.5"/><path d="M5 7h6M8 7v5M6 14h4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="square"/></svg>
+  return <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><circle cx="7.5" cy="3" r="1.5" stroke="currentColor" strokeWidth="1.25"/><path d="M4.5 6.5h6M7.5 6.5v5M5.5 13.5h4" stroke="currentColor" strokeWidth="1.25" strokeLinecap="square"/></svg>
 }
 function HabitsIcon() {
-  return <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 8l4 4 8-8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="square" strokeLinejoin="miter"/></svg>
+  return <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><path d="M2 7.5l3.5 3.5 7.5-7.5" stroke="currentColor" strokeWidth="1.25" strokeLinecap="square" strokeLinejoin="miter"/></svg>
+}
+function ChevronIcon() {
+  return <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 3.5l3 3 3-3" stroke="currentColor" strokeWidth="1.25" strokeLinecap="square"/></svg>
 }
 
-interface Props {
-  email: string
-  children: React.ReactNode
-}
+interface Props { email: string; children: React.ReactNode }
 
 export default function AppShell({ email, children }: Props) {
   const pathname = usePathname()
-  const router = useRouter()
+  const router   = useRouter()
   const supabase = createClient()
   const [accountOpen, setAccountOpen] = useState(false)
 
@@ -55,25 +55,34 @@ export default function AppShell({ email, children }: Props) {
   return (
     <div className="min-h-screen flex flex-col lg:flex-row" style={{ background: 'var(--bg)' }}>
 
-      {/* ── Sidebar (desktop) ── */}
-      <aside className="hidden lg:flex flex-col w-56 border-r shrink-0 fixed h-full"
-        style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}>
+      {/* ── Sidebar desktop ── */}
+      <aside className="hidden lg:flex flex-col w-52 fixed h-full"
+        style={{ background: 'var(--surface)', borderRight: '1px solid var(--border)' }}>
 
-        {/* Logo */}
-        <div className="px-6 py-5 border-b" style={{ borderColor: 'var(--border)' }}>
-          <span className="text-xs uppercase tracking-[0.3em] text-[var(--text-3)]">FitApp</span>
+        <div className="px-5 py-4" style={{ borderBottom: '1px solid var(--border)' }}>
+          <span style={{ fontSize: 10, letterSpacing: '0.25em', textTransform: 'uppercase', color: 'var(--text-3)', fontWeight: 500 }}>
+            FitApp
+          </span>
         </div>
 
-        {/* Nav links */}
-        <nav className="flex-1 py-4">
+        <nav className="flex-1 py-3">
           {NAV.map(item => {
             const active = pathname === item.href || pathname.startsWith(item.href + '/')
             return (
               <Link key={item.href} href={item.href}
-                className={`flex items-center gap-3 px-6 py-2.5 text-sm transition-all ${active
-                  ? 'text-[var(--accent)] border-r-2 border-[var(--accent)]'
-                  : 'text-[var(--text-2)] hover:text-[var(--text)]'}`}>
-                <span className={active ? 'text-[var(--accent)]' : 'text-[var(--text-3)]'}>{item.icon}</span>
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 10,
+                  padding: '9px 20px',
+                  fontSize: 13,
+                  fontWeight: active ? 500 : 400,
+                  color: active ? 'var(--accent)' : 'var(--text-2)',
+                  borderRight: active ? '2px solid var(--accent)' : '2px solid transparent',
+                  transition: 'color 0.15s',
+                  textDecoration: 'none',
+                }}>
+                <span style={{ color: active ? 'var(--accent)' : 'var(--text-3)' }}>{item.icon}</span>
                 {item.label}
               </Link>
             )
@@ -81,31 +90,42 @@ export default function AppShell({ email, children }: Props) {
         </nav>
 
         {/* User block */}
-        <div className="border-t p-4" style={{ borderColor: 'var(--border)' }}>
-          <div className="relative">
-            <button
-              onClick={() => setAccountOpen(o => !o)}
-              className="w-full flex items-center gap-3 px-3 py-2 hover:bg-[var(--surface-2)] transition-colors text-left">
-              <div className="w-7 h-7 flex items-center justify-center text-xs font-medium shrink-0"
-                style={{ background: 'var(--accent)', color: '#000' }}>
-                {initials}
-              </div>
-              <span className="text-xs text-[var(--text-2)] truncate flex-1">{email}</span>
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" className="shrink-0 text-[var(--text-3)]">
-                <path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="square"/>
-              </svg>
+        <div style={{ borderTop: '1px solid var(--border)', padding: 12 }}>
+          <div style={{ position: 'relative' }}>
+            <button onClick={() => setAccountOpen(o => !o)}
+              style={{
+                width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+                padding: '8px 10px', cursor: 'pointer', background: 'none', border: 'none',
+                transition: 'background 0.15s',
+              }}
+              onMouseEnter={e => (e.currentTarget.style.background = 'var(--surface-2)')}
+              onMouseLeave={e => (e.currentTarget.style.background = 'none')}>
+              <div style={{
+                width: 28, height: 28, background: 'var(--accent)', color: '#000',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 11, fontWeight: 700, flexShrink: 0,
+              }}>{initials}</div>
+              <span style={{ fontSize: 12, color: 'var(--text-2)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'left' }}>
+                {email}
+              </span>
+              <span style={{ color: 'var(--text-3)', flexShrink: 0 }}><ChevronIcon /></span>
             </button>
 
             {accountOpen && (
-              <div className="absolute bottom-full left-0 right-0 mb-1 border py-1"
-                style={{ background: 'var(--surface-2)', borderColor: 'var(--border-2)' }}>
+              <div style={{
+                position: 'absolute', bottom: '100%', left: 0, right: 0, marginBottom: 4,
+                background: 'var(--surface-3)', border: '1px solid var(--border-2)',
+                zIndex: 50,
+              }}>
                 <Link href="/account" onClick={() => setAccountOpen(false)}
-                  className="flex items-center gap-2 px-4 py-2 text-xs text-[var(--text-2)] hover:text-[var(--text)] hover:bg-[var(--surface)] transition-colors">
+                  style={{ display: 'block', padding: '9px 14px', fontSize: 12, color: 'var(--text-2)', textDecoration: 'none' }}
+                  onMouseEnter={e => (e.currentTarget.style.color = 'var(--text)')}
+                  onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-2)')}>
                   Account settings
                 </Link>
-                <div className="h-px my-1" style={{ background: 'var(--border)' }} />
+                <div style={{ height: 1, background: 'var(--border)' }} />
                 <button onClick={handleSignOut}
-                  className="w-full flex items-center gap-2 px-4 py-2 text-xs text-[var(--red)] hover:bg-[var(--surface)] transition-colors">
+                  style={{ width: '100%', padding: '9px 14px', fontSize: 12, color: 'var(--red)', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer' }}>
                   Sign out
                 </button>
               </div>
@@ -114,27 +134,31 @@ export default function AppShell({ email, children }: Props) {
         </div>
       </aside>
 
-      {/* ── Top bar (mobile) ── */}
-      <header className="lg:hidden flex items-center justify-between px-4 py-3 border-b sticky top-0 z-40"
-        style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}>
-        <span className="text-xs uppercase tracking-[0.3em] text-[var(--text-3)]">FitApp</span>
-        <div className="relative">
+      {/* ── Mobile top bar ── */}
+      <header className="lg:hidden flex items-center justify-between px-4 py-3 sticky top-0 z-40"
+        style={{ background: 'var(--surface)', borderBottom: '1px solid var(--border)' }}>
+        <span style={{ fontSize: 10, letterSpacing: '0.25em', textTransform: 'uppercase', color: 'var(--text-3)', fontWeight: 500 }}>
+          FitApp
+        </span>
+        <div style={{ position: 'relative' }}>
           <button onClick={() => setAccountOpen(o => !o)}
-            className="w-8 h-8 flex items-center justify-center text-xs font-medium"
-            style={{ background: 'var(--accent)', color: '#000' }}>
+            style={{ width: 32, height: 32, background: 'var(--accent)', color: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, border: 'none', cursor: 'pointer' }}>
             {initials}
           </button>
           {accountOpen && (
-            <div className="absolute top-full right-0 mt-1 w-48 border py-1 z-50"
-              style={{ background: 'var(--surface-2)', borderColor: 'var(--border-2)' }}>
-              <div className="px-4 py-2 text-xs text-[var(--text-3)] border-b truncate"
-                style={{ borderColor: 'var(--border)' }}>{email}</div>
+            <div style={{
+              position: 'absolute', top: '100%', right: 0, marginTop: 4,
+              width: 180, background: 'var(--surface-3)', border: '1px solid var(--border-2)', zIndex: 50,
+            }}>
+              <div style={{ padding: '8px 14px', fontSize: 11, color: 'var(--text-3)', borderBottom: '1px solid var(--border)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {email}
+              </div>
               <Link href="/account" onClick={() => setAccountOpen(false)}
-                className="flex items-center px-4 py-2 text-xs text-[var(--text-2)] hover:text-[var(--text)] hover:bg-[var(--surface)] transition-colors">
+                style={{ display: 'block', padding: '9px 14px', fontSize: 12, color: 'var(--text-2)', textDecoration: 'none' }}>
                 Account settings
               </Link>
               <button onClick={handleSignOut}
-                className="w-full text-left px-4 py-2 text-xs text-[var(--red)] hover:bg-[var(--surface)] transition-colors">
+                style={{ width: '100%', padding: '9px 14px', fontSize: 12, color: 'var(--red)', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer' }}>
                 Sign out
               </button>
             </div>
@@ -142,27 +166,34 @@ export default function AppShell({ email, children }: Props) {
         </div>
       </header>
 
-      {/* ── Main content ── */}
-      <main className="flex-1 lg:ml-56 pb-20 lg:pb-0">
-        <div className="max-w-2xl mx-auto px-4 py-6">
+      {/* ── Main ── */}
+      <main className="flex-1 lg:ml-52 pb-24 lg:pb-8" style={{ background: 'var(--bg)' }}>
+        <div style={{ maxWidth: 680, margin: '0 auto', padding: '28px 20px' }}>
           {children}
         </div>
       </main>
 
-      {/* ── Bottom nav (mobile) ── */}
-      <nav className="lg:hidden fixed bottom-0 inset-x-0 border-t z-40 grid"
+      {/* ── Mobile bottom nav ── */}
+      <nav className="lg:hidden fixed bottom-0 inset-x-0 z-40"
         style={{
           background: 'var(--surface)',
-          borderColor: 'var(--border)',
-          gridTemplateColumns: `repeat(${NAV.length}, 1fr)`
+          borderTop: '1px solid var(--border)',
+          display: 'grid',
+          gridTemplateColumns: `repeat(${NAV.length}, 1fr)`,
         }}>
         {NAV.map(item => {
           const active = pathname === item.href || pathname.startsWith(item.href + '/')
           return (
             <Link key={item.href} href={item.href}
-              className={`flex flex-col items-center gap-1 py-3 text-[10px] transition-all ${active ? 'text-[var(--accent)]' : 'text-[var(--text-3)]'}`}>
+              style={{
+                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+                padding: '10px 4px', fontSize: 9, fontWeight: 500, textTransform: 'uppercase',
+                letterSpacing: '0.05em', textDecoration: 'none',
+                color: active ? 'var(--accent)' : 'var(--text-3)',
+                transition: 'color 0.15s',
+              }}>
               {item.icon}
-              <span>{item.label}</span>
+              {item.label}
             </Link>
           )
         })}
