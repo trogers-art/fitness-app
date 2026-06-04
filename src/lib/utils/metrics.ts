@@ -38,7 +38,7 @@ function computeMacros(
   return { proteinG, fatG, carbsG }
 }
 
-export function computeMetrics(data: OnboardingFormData): Omit<
+export function computeMetrics(data: OnboardingFormData & { units?: string }): Omit<
   UserProfile,
   'id' | 'user_id' | 'created_at' | 'updated_at' | 'timezone'
 > & { timezone: string } {
@@ -90,6 +90,7 @@ export function computeMetrics(data: OnboardingFormData): Omit<
     fat_g: fatG,
     training_day_carbs_g: trainingDayCarbsG,
     rest_day_carbs_g: restDayCarbsG,
+    units: data.units || 'imperial',
   }
 }
 
