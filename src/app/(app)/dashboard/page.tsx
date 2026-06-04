@@ -8,6 +8,7 @@ export default async function DashboardPage() {
   if (!user) redirect('/login')
 
   const today = new Date().toISOString().split('T')[0]
+  const emailConfirmed = !!user?.email_confirmed_at
 
   const [profileRes, nutritionRes, bodyRes, checkinsRes] = await Promise.all([
     supabase.from('user_profiles').select('*').eq('user_id', user.id).single(),
@@ -15,9 +16,6 @@ export default async function DashboardPage() {
     supabase.from('body_metrics').select('weight_kg, logged_at').eq('user_id', user.id).order('logged_at', { ascending: false }).limit(14),
     supabase.from('checkin_logs').select('explanation, created_at').eq('user_id', user.id).order('created_at', { ascending: false }).limit(1),
   ])
-
-  const { data: { user } } = await supabase.auth.getUser()
-  const emailConfirmed = !!user?.email_confirmed_at
 
   return (
     <DashboardClient
