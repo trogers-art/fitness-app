@@ -7,6 +7,7 @@ import Link from 'next/link'
 
 interface Props {
   profile: UserProfile | null
+  emailConfirmed: boolean
   todayNutrition: DailyNutritionSummary | null
   recentWeights: Pick<BodyMetric, 'weight_kg' | 'logged_at'>[]
   latestCheckin: { explanation: string; created_at: string } | null
@@ -29,7 +30,7 @@ function MacroRingChart({ eaten, target, color }: { eaten: number; target: numbe
   )
 }
 
-export default function DashboardClient({ profile, todayNutrition, recentWeights, latestCheckin }: Props) {
+export default function DashboardClient({ profile, todayNutrition, recentWeights, latestCheckin, emailConfirmed }: Props) {
   if (!profile) {
     return (
       <div className="text-center py-20">
@@ -42,8 +43,12 @@ export default function DashboardClient({ profile, todayNutrition, recentWeights
   const nutrition = todayNutrition || { total_calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0, workout_calories_burned: 0, net_calories: 0 }
   const netCals = nutrition.total_calories - nutrition.workout_calories_burned
   const calsRemaining = profile.daily_calories - netCals
-  const rollingAvg = computeRollingAverage(recentWeights.map(w => ({ date: w.logged_at, weight_kg: w.weight_kg })))
-  const latestWeight = recentWeights[0]?.weight_kg
+  const kgToLbs = (kg: number) => Math.round(kg * 2.20462 * 10) / 10
+  const isImperial = profile.units === 'imperial'
+  const displayWeight = (kg: number) => isImperial ? `${kgToLbs(kg)} lbs` : `${kg} kg`
+  const rollingAvgKg = computeRollingAverage(recentWeights.map(w => ({ date: w.logged_at, weight_kg: w.weight_kg })))
+  const rollingAvg = rollingAvgKg ? kgToLbs(rollingAvgKg) : null
+  const latestWeight = recentWeights[0]?.weight_kg ? kgToLbs(recentWeights[0].weight_kg) : null
 
   const weightChartData = recentWeights
     .slice()
@@ -52,6 +57,18 @@ export default function DashboardClient({ profile, todayNutrition, recentWeights
 
   return (
     <div className="space-y-5">
+      {/* Email confirmation banner */}
+      {!emailConfirmed && (
+        <div className="flex items-start gap-3 p-4 rounded-xl bg-amber-50 border border-amber-200">
+          <svg className="w-5 h-5 text-amber-500 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+          </svg>
+          <div>
+            <p className="text-sm font-medium text-amber-800">Confirm your email address</p>
+            <p className="text-xs text-amber-600 mt-0.5">Check your inbox and click the confirmation link to secure your account.</p>
+          </div>
+        </div>
+      )}
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Today</h1>
@@ -113,9 +130,9 @@ export default function DashboardClient({ profile, todayNutrition, recentWeights
             <Link href="/body" className="text-xs text-brand-600 font-medium">Log weight →</Link>
           </div>
           <div className="flex items-baseline gap-3 mb-4">
-            <span className="text-2xl font-bold text-gray-900">{latestWeight} kg</span>
+            <span className="text-2xl font-bold text-gray-900">{latestWeight ? displayWeight(recentWeights[0].weight_kg) : ''}</span>
             {rollingAvg && (
-              <span className="text-sm text-gray-500">7-day avg: {rollingAvg} kg</span>
+              <span className="text-sm text-gray-500">7-day avg: {rollingAvgKg ? displayWeight(rollingAvgKg) : ''}</span>
             )}
           </div>
           {weightChartData.length > 1 && (
@@ -126,7 +143,7 @@ export default function DashboardClient({ profile, todayNutrition, recentWeights
                   <YAxis domain={['auto', 'auto']} tick={{ fontSize: 10 }} tickLine={false} axisLine={false} width={30} />
                   <Tooltip
                     contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e5e7eb' }}
-                    formatter={(v: number) => [`${v} kg`, 'Weight']}
+                    formatter={(v: number) => [isImperial ? `${Math.round(v * 2.20462 * 10) / 10} lbs` : `${v} kg`, 'Weight']}
                   />
                   {rollingAvg && <ReferenceLine y={rollingAvg} stroke="#22c55e" strokeDasharray="3 3" />}
                   <Line type="monotone" dataKey="weight" stroke="#6366f1" strokeWidth={2} dot={{ r: 3, fill: '#6366f1' }} />

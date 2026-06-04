@@ -4,6 +4,10 @@
  * Pulls free-exercise-db JSON and seeds the exercises table.
  */
 
+import { config } from 'dotenv'
+import { resolve } from 'path'
+config({ path: resolve(process.cwd(), '.env.local') })
+
 import { createClient } from '@supabase/supabase-js'
 
 const supabase = createClient(

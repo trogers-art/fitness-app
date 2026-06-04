@@ -18,18 +18,24 @@ export default function SignupPage() {
     setLoading(true)
     setError(null)
 
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
-    })
-
-    if (error) {
-      setError(error.message)
+    // Step 1: create the account
+    const { error: signUpError } = await supabase.auth.signUp({ email, password })
+    if (signUpError) {
+      setError(signUpError.message)
       setLoading(false)
       return
     }
 
+    // Step 2: immediately sign in to establish a session regardless of email confirmation status
+    const { error: signInError } = await supabase.auth.signInWithPassword({ email, password })
+    if (signInError) {
+      // Fallback — if sign in fails for any reason, tell them to confirm then log in
+      setError('Account created! Check your email to confirm, then sign in.')
+      setLoading(false)
+      return
+    }
+
+    // Session is live — proceed to onboarding
     router.push('/onboarding')
     router.refresh()
   }
@@ -40,7 +46,7 @@ export default function SignupPage() {
       <p className="text-sm text-gray-500 mb-6">Get your personalised plan in minutes.</p>
 
       {error && (
-        <div className="mb-4 p-3 rounded-xl bg-red-50 border border-red-100 text-sm text-red-600">
+        <div className={`mb-4 p-3 rounded-xl border text-sm ${error.includes('Check your email') ? 'bg-blue-50 border-blue-100 text-blue-700' : 'bg-red-50 border-red-100 text-red-600'}`}>
           {error}
         </div>
       )}
@@ -48,26 +54,13 @@ export default function SignupPage() {
       <form onSubmit={handleSignup} className="space-y-4">
         <div>
           <label className="label">Email</label>
-          <input
-            className="input"
-            type="email"
-            value={email}
-            onChange={e => setEmail(e.target.value)}
-            placeholder="you@example.com"
-            required
-          />
+          <input className="input" type="email" value={email}
+            onChange={e => setEmail(e.target.value)} placeholder="you@example.com" required />
         </div>
         <div>
           <label className="label">Password</label>
-          <input
-            className="input"
-            type="password"
-            value={password}
-            onChange={e => setPassword(e.target.value)}
-            placeholder="Min 8 characters"
-            minLength={8}
-            required
-          />
+          <input className="input" type="password" value={password}
+            onChange={e => setPassword(e.target.value)} placeholder="Min 8 characters" minLength={8} required />
         </div>
         <button type="submit" disabled={loading} className="btn-primary w-full">
           {loading ? 'Creating account…' : 'Create account'}
@@ -76,9 +69,7 @@ export default function SignupPage() {
 
       <p className="mt-6 text-center text-sm text-gray-500">
         Already have an account?{' '}
-        <Link href="/login" className="text-brand-600 font-medium hover:underline">
-          Sign in
-        </Link>
+        <Link href="/login" className="text-brand-600 font-medium hover:underline">Sign in</Link>
       </p>
     </div>
   )

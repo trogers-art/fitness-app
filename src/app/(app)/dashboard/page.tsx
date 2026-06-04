@@ -16,9 +16,13 @@ export default async function DashboardPage() {
     supabase.from('checkin_logs').select('explanation, created_at').eq('user_id', user.id).order('created_at', { ascending: false }).limit(1),
   ])
 
+  const { data: { user } } = await supabase.auth.getUser()
+  const emailConfirmed = !!user?.email_confirmed_at
+
   return (
     <DashboardClient
       profile={profileRes.data}
+      emailConfirmed={emailConfirmed}
       todayNutrition={nutritionRes.data}
       recentWeights={bodyRes.data || []}
       latestCheckin={checkinsRes.data?.[0] || null}

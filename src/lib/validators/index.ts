@@ -11,6 +11,7 @@ export const OnboardingSchema = z.object({
   goal: z.enum(['fat_loss', 'muscle_gain', 'maintain']),
   target_rate_kg_per_week: z.number().min(0.1).max(1.0),
   timezone: z.string().min(1),
+  units: z.enum(['imperial', 'metric']).default('imperial'),
 })
 
 // ─── Food ──────────────────────────────────────────────────────────────────
