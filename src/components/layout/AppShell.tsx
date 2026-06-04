@@ -141,7 +141,7 @@ export default function AppShell({ email, theme: initialTheme, children }: Props
       </header>
 
       {/* ── Main ── */}
-      <main style={{ flex: 1, paddingBottom: 96, background: 'var(--bg)' }} className="app-main">
+      <main style={{ flex: 1, paddingBottom: 120, background: 'var(--bg)' }} className="app-main">
         <div style={{ maxWidth: 680, margin: '0 auto', padding: '28px 20px' }}>
           {children}
         </div>
@@ -165,7 +165,7 @@ export default function AppShell({ email, theme: initialTheme, children }: Props
           .lg-sidebar { display: flex !important; }
           .mobile-header { display: none !important; }
           .mobile-nav { display: none !important; }
-          .app-main { margin-left: 190px; padding-bottom: 32px !important; }
+          .app-main { margin-left: 190px; padding-bottom: 48px !important; }
         }
       `}</style>
     </div>
