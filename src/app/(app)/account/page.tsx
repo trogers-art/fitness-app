@@ -9,9 +9,15 @@ export default async function AccountPage() {
 
   const { data: profile } = await supabase
     .from('user_profiles')
-    .select('goal, units, daily_calories, protein_g, carbs_g, fat_g, bmr, tdee, weight_kg, height_cm, age, sex, activity_level')
+    .select('goal, units, theme, daily_calories, protein_g, carbs_g, fat_g, bmr, tdee, weight_kg, height_cm, age, sex, activity_level')
     .eq('user_id', user.id)
     .single()
 
-  return <AccountClient email={user.email ?? ''} emailConfirmed={!!user.email_confirmed_at} profile={profile} />
+  return (
+    <AccountClient
+      email={user.email ?? ''}
+      emailConfirmed={!!user.email_confirmed_at}
+      profile={profile}
+    />
+  )
 }
