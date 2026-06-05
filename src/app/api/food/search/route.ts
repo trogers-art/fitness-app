@@ -1,211 +1,80 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import crypto from 'crypto'
-
-// ── FatSecret OAuth 1.0 ───────────────────────────────────────────────────
-
-function sign(method: string, url: string, params: Record<string, string>, secret: string): string {
-  const normalized = Object.keys(params)
-    .sort()
-    .map(k => `${encodeURIComponent(k)}=${encodeURIComponent(params[k])}`)
-    .join('&')
-  const base = `${method.toUpperCase()}&${encodeURIComponent(url)}&${encodeURIComponent(normalized)}`
-  const key  = `${encodeURIComponent(secret)}&`
-  return crypto.createHmac('sha1', key).update(base).digest('base64')
-}
-
-async function fatSecretPOST(methodName: string, extra: Record<string, string>): Promise<any> {
-  const key    = process.env.FATSECRET_CONSUMER_KEY?.trim()
-  const secret = process.env.FATSECRET_CONSUMER_SECRET?.trim()
-  if (!key || !secret) return null
-
-  const url = 'https://platform.fatsecret.com/rest/server.api'
-  const params: Record<string, string> = {
-    method: methodName, format: 'json',
-    oauth_consumer_key: key,
-    oauth_nonce: crypto.randomBytes(16).toString('hex'),
-    oauth_signature_method: 'HMAC-SHA1',
-    oauth_timestamp: Math.floor(Date.now() / 1000).toString(),
-    oauth_version: '1.0',
-    ...extra,
-  }
-  params.oauth_signature = sign('POST', url, params, secret)
-
-  try {
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams(params).toString(),
-    })
-    const data = await res.json()
-    if (data.error) { console.error('[FS] error:', data.error); return null }
-    return data
-  } catch (e) {
-    console.error('[FS] request error:', e)
-    return null
-  }
-}
-
-// ── Get full food detail (for branded/serving-based foods) ────────────────
-
-interface FSServing {
-  serving_description: string
-  metric_serving_amount?: string
-  metric_serving_unit?: string
-  calories: string
-  carbohydrate: string
-  protein: string
-  fat: string
-  fiber?: string
-}
-
-async function getFoodDetail(foodId: string): Promise<{
-  calories_per_100g: number
-  protein_per_100g: number
-  carbs_per_100g: number
-  fat_per_100g: number
-  fibre_per_100g: number | null
-  serving_size_g: number | null
-} | null> {
-  const data = await fatSecretPOST('food.get.v4', { food_id: foodId, format: 'json' })
-  if (!data?.food?.servings?.serving) return null
-
-  const servings: FSServing[] = Array.isArray(data.food.servings.serving)
-    ? data.food.servings.serving
-    : [data.food.servings.serving]
-
-  // Prefer explicit 100g serving if available
-  const per100 = servings.find(s =>
-    s.serving_description.toLowerCase().includes('100g') ||
-    s.serving_description.toLowerCase().includes('100 g') ||
-    (s.metric_serving_amount === '100' && s.metric_serving_unit === 'g')
-  )
-
-  if (per100) {
-    return {
-      calories_per_100g: Math.round(parseFloat(per100.calories)),
-      protein_per_100g:  Math.round(parseFloat(per100.protein)     * 10) / 10,
-      carbs_per_100g:    Math.round(parseFloat(per100.carbohydrate) * 10) / 10,
-      fat_per_100g:      Math.round(parseFloat(per100.fat)          * 10) / 10,
-      fibre_per_100g:    per100.fiber ? Math.round(parseFloat(per100.fiber) * 10) / 10 : null,
-      serving_size_g:    null,
-    }
-  }
-
-  // Otherwise use first serving with a gram measurement and normalise to 100g
-  const withGrams = servings.find(s =>
-    s.metric_serving_unit === 'g' &&
-    s.metric_serving_amount &&
-    parseFloat(s.metric_serving_amount) > 0
-  )
-
-  if (withGrams) {
-    const g = parseFloat(withGrams.metric_serving_amount!)
-    const factor = 100 / g
-    return {
-      calories_per_100g: Math.round(parseFloat(withGrams.calories)       * factor),
-      protein_per_100g:  Math.round(parseFloat(withGrams.protein)         * factor * 10) / 10,
-      carbs_per_100g:    Math.round(parseFloat(withGrams.carbohydrate)    * factor * 10) / 10,
-      fat_per_100g:      Math.round(parseFloat(withGrams.fat)             * factor * 10) / 10,
-      fibre_per_100g:    withGrams.fiber
-        ? Math.round(parseFloat(withGrams.fiber) * factor * 10) / 10
-        : null,
-      serving_size_g: Math.round(g * 10) / 10,
-    }
-  }
-
-  return null
-}
-
-// ── Search ────────────────────────────────────────────────────────────────
+import { fatSecretPOST } from '@/lib/utils/fatsecret'
 
 async function searchFatSecret(query: string) {
   const data = await fatSecretPOST('foods.search', {
-    search_expression: query,
-    max_results: '10',
-    page_number: '0',
+    search_expression:  query,
+    max_results:        '10',
+    page_number:        '0',
+    flag_default_serving: 'true',
   })
 
   if (!data?.foods?.food) return []
 
   const list = Array.isArray(data.foods.food) ? data.foods.food : [data.foods.food]
 
-  const results = await Promise.all(
-    list
-      .filter((f: any) => f.food_description && f.food_name)
-      .map(async (f: any) => {
-        const desc      = f.food_description as string
-        const isBranded = f.food_type === 'Brand'
+  return list
+    .filter((f: any) => f.food_name && f.servings?.serving)
+    .map((f: any) => {
+      const servingsRaw = f.servings.serving
+      const allServings = Array.isArray(servingsRaw) ? servingsRaw : [servingsRaw]
 
-        // Check if description is per 100g
-        const isPer100g   = /per\s+100\s*g/i.test(desc)
-        const gramMatch   = desc.match(/per\s+([\d.]+)\s*g/i)
-        const servingGram = gramMatch ? parseFloat(gramMatch[1]) : null
+      // Find default serving, then first non-100g, then 100g fallback
+      const defaultServing = allServings.find((s: any) => s.is_default === '1' || s.is_default === 1)
+        || allServings.find((s: any) => parseFloat(s.metric_serving_amount || '0') !== 100 && s.metric_serving_unit === 'g')
+        || allServings.find((s: any) => s.metric_serving_unit === 'g')
+        || allServings[0]
 
-        const calMatch  = desc.match(/Calories:\s*([\d.]+)kcal/i)
-        const fatMatch  = desc.match(/Fat:\s*([\d.]+)g/i)
-        const carbMatch = desc.match(/Carbs:\s*([\d.]+)g/i)
-        const protMatch = desc.match(/Protein:\s*([\d.]+)g/i)
+      // Get 100g serving for per-100g storage
+      const per100 = allServings.find((s: any) =>
+        parseFloat(s.metric_serving_amount || '0') === 100 && s.metric_serving_unit === 'g'
+      ) || defaultServing
 
-        if (!calMatch) return null
+      if (!per100 || !parseFloat(per100.calories)) return null
 
-        let calories = parseFloat(calMatch[1])
-        let fat      = parseFloat(fatMatch?.[1]  || '0')
-        let carbs    = parseFloat(carbMatch?.[1] || '0')
-        let protein  = parseFloat(protMatch?.[1] || '0')
-        let serving_size_g: number | null = null
-        let fibre_per_100g: number | null = null
+      const g100  = parseFloat(per100.metric_serving_amount || '100')
+      const scale = 100 / g100
 
-        if (isPer100g) {
-          // Already per 100g — use as-is
-        } else if (servingGram && servingGram !== 100) {
-          // Known gram amount — normalise to 100g
-          const factor = 100 / servingGram
-          calories = calories * factor
-          fat      = fat      * factor
-          carbs    = carbs    * factor
-          protein  = protein  * factor
-          serving_size_g = servingGram
-        } else if (isBranded) {
-          // "Per 1 serving" with no gram amount — fetch full detail
-          const detail = await getFoodDetail(f.food_id)
-          if (detail) {
-            return {
-              barcode:           null,
-              name:              f.food_name.trim(),
-              brand:             f.brand_name?.trim() || null,
-              calories_per_100g: detail.calories_per_100g,
-              protein_per_100g:  detail.protein_per_100g,
-              carbs_per_100g:    detail.carbs_per_100g,
-              fat_per_100g:      detail.fat_per_100g,
-              fibre_per_100g:    detail.fibre_per_100g,
-              serving_size_g:    detail.serving_size_g,
-              source:            'openfoodfacts' as const,
-              user_id:           null,
-            }
-          }
-        }
+      // Build serving options array for the detail view
+      const servingOptions = allServings
+        .filter((s: any) => s.metric_serving_unit === 'g' && parseFloat(s.metric_serving_amount || '0') > 0)
+        .map((s: any) => ({
+          serving_id:  s.serving_id,
+          description: s.serving_description,
+          metric_g:    Math.round(parseFloat(s.metric_serving_amount) * 10) / 10,
+          calories:    Math.round(parseFloat(s.calories)),
+          protein:     Math.round(parseFloat(s.protein)      * 10) / 10,
+          carbs:       Math.round(parseFloat(s.carbohydrate)  * 10) / 10,
+          fat:         Math.round(parseFloat(s.fat)           * 10) / 10,
+          is_default:  s.is_default === '1' || s.is_default === 1,
+        }))
 
-        return {
-          barcode:           null,
-          name:              f.food_name.trim(),
-          brand:             f.brand_name?.trim() || null,
-          calories_per_100g: Math.round(calories),
-          protein_per_100g:  Math.round(protein * 10) / 10,
-          carbs_per_100g:    Math.round(carbs   * 10) / 10,
-          fat_per_100g:      Math.round(fat     * 10) / 10,
-          fibre_per_100g,
-          serving_size_g,
-          source:            'openfoodfacts' as const,
-          user_id:           null,
-        }
-      })
-  )
-
-  return results.filter(Boolean)
+      return {
+        barcode:           null,
+        name:              f.food_name.trim(),
+        brand:             f.brand_name?.trim() || null,
+        calories_per_100g: Math.round(parseFloat(per100.calories)      * scale),
+        protein_per_100g:  Math.round(parseFloat(per100.protein)        * scale * 10) / 10,
+        carbs_per_100g:    Math.round(parseFloat(per100.carbohydrate)   * scale * 10) / 10,
+        fat_per_100g:      Math.round(parseFloat(per100.fat)            * scale * 10) / 10,
+        fibre_per_100g:    per100.fiber ? Math.round(parseFloat(per100.fiber) * scale * 10) / 10 : null,
+        // Default serving for display in search results list
+        serving_size_g:    defaultServing ? Math.round(parseFloat(defaultServing.metric_serving_amount) * 10) / 10 : null,
+        serving_description: defaultServing?.serving_description || null,
+        serving_calories:  defaultServing ? Math.round(parseFloat(defaultServing.calories)) : null,
+        serving_protein:   defaultServing ? Math.round(parseFloat(defaultServing.protein) * 10) / 10 : null,
+        serving_carbs:     defaultServing ? Math.round(parseFloat(defaultServing.carbohydrate) * 10) / 10 : null,
+        serving_fat:       defaultServing ? Math.round(parseFloat(defaultServing.fat) * 10) / 10 : null,
+        // Full servings list embedded — no follow-up food.get needed
+        servings_json:     JSON.stringify(servingOptions),
+        fs_food_id:        f.food_id?.toString() || null,
+        source:            'openfoodfacts' as const,
+        user_id:           null,
+      }
+    })
+    .filter(Boolean)
 }
-
-// ── Route ─────────────────────────────────────────────────────────────────
 
 export async function GET(request: NextRequest) {
   const supabase = createClient()
@@ -222,24 +91,24 @@ export async function GET(request: NextRequest) {
     .ilike('name', `%${q}%`)
     .order('name').limit(10)
 
-  if (localFoods && localFoods.length >= 6) {
+  // Only use cache if foods have fs_food_id (so servings work)
+  if (localFoods && localFoods.length >= 6 && localFoods.every((f: any) => f.fs_food_id)) {
     return NextResponse.json({ foods: sortByRelevance(localFoods, q) })
   }
 
-  // 2. FatSecret
+  // 2. FatSecret search.v2
   const external = (await searchFatSecret(q)).filter(Boolean)
 
   // 3. Cache best-effort
   if (external.length > 0) {
-    supabase.from('foods')
-      .insert(external)
-      .then(() => null).catch(() => null)
+    const toStore = external.map(({ servings_json, serving_description, serving_calories, serving_protein, serving_carbs, serving_fat, ...f }: any) => f)
+    supabase.from('foods').insert(toStore).then(() => null).catch(() => null)
   }
 
-  // 4. Merge and return
+  // 4. Merge and return (include full servings_json for client)
   const seen = new Set<string>()
-  const merged = [...(localFoods || []), ...external].filter(f => {
-    const key = (f.name as string).toLowerCase()
+  const merged = [...(localFoods || []), ...external].filter((f: any) => {
+    const key = f.name.toLowerCase()
     if (seen.has(key)) return false
     seen.add(key)
     return true
@@ -257,8 +126,8 @@ function sortByRelevance(foods: any[], q: string) {
     if (bl === ql && al !== ql) return 1
     if (al.startsWith(ql) && !bl.startsWith(ql)) return -1
     if (bl.startsWith(ql) && !al.startsWith(ql)) return 1
-    if (a.serving_size_g && !b.serving_size_g) return -1
-    if (b.serving_size_g && !a.serving_size_g) return 1
+    if (a.serving_description && !b.serving_description) return -1
+    if (b.serving_description && !a.serving_description) return 1
     return al.length - bl.length
   })
 }

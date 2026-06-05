@@ -18,35 +18,27 @@ export default function SignupPage() {
     setLoading(true)
     setError(null)
 
-    // Step 1: create the account
     const { error: signUpError } = await supabase.auth.signUp({ email, password })
-    if (signUpError) {
-      setError(signUpError.message)
-      setLoading(false)
-      return
-    }
+    if (signUpError) { setError(signUpError.message); setLoading(false); return }
 
-    // Step 2: immediately sign in to establish a session regardless of email confirmation status
     const { error: signInError } = await supabase.auth.signInWithPassword({ email, password })
     if (signInError) {
-      // Fallback — if sign in fails for any reason, tell them to confirm then log in
-      setError('Account created! Check your email to confirm, then sign in.')
+      setError('Account created. Check your email to confirm, then sign in.')
       setLoading(false)
       return
     }
 
-    // Session is live — proceed to onboarding
     router.push('/onboarding')
     router.refresh()
   }
 
   return (
-    <div className="card p-8">
-      <h2 className="text-xl font-semibold text-gray-900 mb-2">Create account</h2>
-      <p className="text-sm text-gray-500 mb-6">Get your personalised plan in minutes.</p>
+    <div>
+      <h1 className="text-2xl font-semibold text-[var(--text)] mb-1">Create account</h1>
+      <p className="text-sm text-[var(--text-2)] mb-8">Get your plan in minutes.</p>
 
       {error && (
-        <div className={`mb-4 p-3 rounded-xl border text-sm ${error.includes('Check your email') ? 'bg-blue-50 border-blue-100 text-blue-700' : 'bg-red-50 border-red-100 text-red-600'}`}>
+        <div className={`mb-6 px-4 py-3 border text-sm ${error.includes('confirm') ? 'border-[var(--amber)] bg-[#ffaa0010] text-[var(--amber)]' : 'border-[var(--red)] bg-[#ff444410] text-[var(--red)]'}`}>
           {error}
         </div>
       )}
@@ -62,14 +54,14 @@ export default function SignupPage() {
           <input className="input" type="password" value={password}
             onChange={e => setPassword(e.target.value)} placeholder="Min 8 characters" minLength={8} required />
         </div>
-        <button type="submit" disabled={loading} className="btn-primary w-full">
-          {loading ? 'Creating account…' : 'Create account'}
+        <button type="submit" disabled={loading} className="btn-primary w-full mt-2">
+          {loading ? 'Creating account...' : 'Create account'}
         </button>
       </form>
 
-      <p className="mt-6 text-center text-sm text-gray-500">
-        Already have an account?{' '}
-        <Link href="/login" className="text-brand-600 font-medium hover:underline">Sign in</Link>
+      <p className="mt-8 text-sm text-[var(--text-3)]">
+        Have an account?{' '}
+        <Link href="/login" className="text-[var(--dark)] hover:underline">Sign in</Link>
       </p>
     </div>
   )

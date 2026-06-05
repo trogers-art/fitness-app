@@ -8,8 +8,12 @@ export async function POST(request: NextRequest) {
     const supabase = createClient()
 
     const { data: { user }, error: authError } = await supabase.auth.getUser()
+
     if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return NextResponse.json(
+        { error: 'Unauthorized — please sign in and try again.' },
+        { status: 401 }
+      )
     }
 
     const body = await request.json()
@@ -24,11 +28,14 @@ export async function POST(request: NextRequest) {
 
     const metrics = computeMetrics(parsed.data)
 
-    // Upsert into user_profiles
     const { data, error } = await supabase
       .from('user_profiles')
       .upsert(
-        { user_id: user.id, ...metrics, updated_at: new Date().toISOString() },
+        {
+          user_id: user.id,
+          ...metrics,
+          updated_at: new Date().toISOString(),
+        },
         { onConflict: 'user_id' }
       )
       .select()

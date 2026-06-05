@@ -17,13 +17,8 @@ export default function LoginPage() {
     e.preventDefault()
     setLoading(true)
     setError(null)
-
     const { error } = await supabase.auth.signInWithPassword({ email, password })
-    if (error) {
-      setError(error.message)
-      setLoading(false)
-      return
-    }
+    if (error) { setError(error.message); setLoading(false); return }
     router.push('/dashboard')
     router.refresh()
   }
@@ -36,11 +31,12 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="card p-8">
-      <h2 className="text-xl font-semibold text-gray-900 mb-6">Sign in</h2>
+    <div>
+      <h1 className="text-2xl font-semibold text-[var(--text)] mb-1">Sign in</h1>
+      <p className="text-sm text-[var(--text-2)] mb-8">Welcome back.</p>
 
       {error && (
-        <div className="mb-4 p-3 rounded-xl bg-red-50 border border-red-100 text-sm text-red-600">
+        <div className="mb-6 px-4 py-3 border border-[var(--red)] bg-[#ff444410] text-sm text-[var(--red)]">
           {error}
         </div>
       )}
@@ -48,41 +44,26 @@ export default function LoginPage() {
       <form onSubmit={handleLogin} className="space-y-4">
         <div>
           <label className="label">Email</label>
-          <input
-            className="input"
-            type="email"
-            value={email}
-            onChange={e => setEmail(e.target.value)}
-            placeholder="you@example.com"
-            required
-          />
+          <input className="input" type="email" value={email}
+            onChange={e => setEmail(e.target.value)} placeholder="you@example.com" required />
         </div>
         <div>
           <label className="label">Password</label>
-          <input
-            className="input"
-            type="password"
-            value={password}
-            onChange={e => setPassword(e.target.value)}
-            placeholder="••••••••"
-            required
-          />
+          <input className="input" type="password" value={password}
+            onChange={e => setPassword(e.target.value)} placeholder="••••••••" required />
         </div>
-        <button type="submit" disabled={loading} className="btn-primary w-full">
-          {loading ? 'Signing in…' : 'Sign in'}
+        <button type="submit" disabled={loading} className="btn-primary w-full mt-2">
+          {loading ? 'Signing in...' : 'Sign in'}
         </button>
       </form>
 
-      <div className="relative my-6">
-        <div className="absolute inset-0 flex items-center">
-          <div className="w-full border-t border-gray-200" />
-        </div>
-        <div className="relative flex justify-center text-xs text-gray-400">
-          <span className="bg-white px-2">or</span>
-        </div>
+      <div className="flex items-center gap-3 my-6">
+        <div className="flex-1 h-px bg-[var(--border)]" />
+        <span className="text-xs text-[var(--text-3)]">or</span>
+        <div className="flex-1 h-px bg-[var(--border)]" />
       </div>
 
-      <button onClick={handleGoogleLogin} className="btn-secondary w-full">
+      <button onClick={handleGoogleLogin} className="w-full flex items-center justify-center gap-3 px-4 py-3 border border-[var(--border-2)] text-sm text-[var(--text-2)] hover:border-[var(--border-2)] hover:text-[var(--text)] hover:bg-[var(--surface-2)] transition-all">
         <svg className="w-4 h-4" viewBox="0 0 24 24">
           <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
           <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
@@ -92,11 +73,9 @@ export default function LoginPage() {
         Continue with Google
       </button>
 
-      <p className="mt-6 text-center text-sm text-gray-500">
-        Don&apos;t have an account?{' '}
-        <Link href="/signup" className="text-brand-600 font-medium hover:underline">
-          Sign up
-        </Link>
+      <p className="mt-8 text-sm text-[var(--text-3)]">
+        No account?{' '}
+        <Link href="/signup" className="text-[var(--dark)] hover:underline">Sign up</Link>
       </p>
     </div>
   )
