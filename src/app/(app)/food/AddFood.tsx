@@ -92,13 +92,13 @@ export default function AddFood({ mealType, mealLabel, onClose, onAdded, loggedA
       } catch { /* fall through */ }
     }
 
-    // Fallback: fetch from API
+    // Fallback: fetch from API — pass food_id so route can look up fs_food_id from DB
     if (food.fs_food_id || (food as any).id) {
       setLoadingSvg(true)
-      const params = (food as any).id
-        ? `food_id=${(food as any).id}&fs_food_id=${food.fs_food_id || ''}`
-        : `fs_food_id=${food.fs_food_id}`
-      const res = await fetch(`/api/food/servings?${params}`, { credentials: 'include' })
+      const params = new URLSearchParams()
+      if ((food as any).id) params.set('food_id', (food as any).id)
+      if (food.fs_food_id) params.set('fs_food_id', food.fs_food_id)
+      const res = await fetch(`/api/food/servings?${params.toString()}`, { credentials: 'include' })
       const data = await res.json()
       const svgs: ServingOption[] = data.servings || []
       setServings(svgs)
@@ -280,12 +280,10 @@ export default function AddFood({ mealType, mealLabel, onClose, onAdded, loggedA
               {results.length > 0 && (
                 <div style={{ border: '1px solid var(--border)' }}>
                   {results.map((food, i) => {
-                    // Show default serving description when available (from search.v2)
+                    // Show serving label from parsed description — "1 mug (8 fl oz) · 2 kcal"
                     const hasServing = food.serving_description && food.serving_calories != null
                     const servingLabel = hasServing
                       ? `${food.serving_description} · ${food.serving_calories} kcal`
-                      : food.serving_size_g
-                      ? `${food.serving_size_g}g · ${Math.round(food.calories_per_100g * food.serving_size_g / 100)} kcal`
                       : `per 100g · ${food.calories_per_100g} kcal`
                     const macroLabel = hasServing
                       ? `${food.serving_protein}p ${food.serving_carbs}c ${food.serving_fat}f`

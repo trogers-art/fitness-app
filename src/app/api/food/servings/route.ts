@@ -13,39 +13,15 @@ export interface ServingOption {
   is_default:  boolean
 }
 
-export async function GET(request: NextRequest) {
-  const supabase = createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-  const fsId   = request.nextUrl.searchParams.get('fs_food_id')
-  const foodId = request.nextUrl.searchParams.get('food_id')
-
-  // Try cached servings_json from DB first
-  if (foodId) {
-    const { data: food } = await supabase
-      .from('foods').select('servings_json').eq('id', foodId).single()
-    if (food?.servings_json) {
-      try {
-        const servings = JSON.parse(food.servings_json)
-        if (Array.isArray(servings) && servings.length > 0) {
-          return NextResponse.json({ servings })
-        }
-      } catch { /* fall through to API */ }
-    }
-  }
-
-  if (!fsId) return NextResponse.json({ servings: [] })
-
-  // Fall back to food.get.v4
+async function fetchFromFatSecret(fsId: string): Promise<ServingOption[]> {
   const data = await fatSecretPOST('food.get.v4', { food_id: fsId })
-  if (!data?.food?.servings?.serving) return NextResponse.json({ servings: [] })
+  if (!data?.food?.servings?.serving) return []
 
   const raw: any[] = Array.isArray(data.food.servings.serving)
     ? data.food.servings.serving
     : [data.food.servings.serving]
 
-  const servings: ServingOption[] = raw
+  return raw
     .filter(s => s.metric_serving_unit === 'g' && parseFloat(s.metric_serving_amount || '0') > 0)
     .map(s => ({
       serving_id:  s.serving_id,
@@ -57,6 +33,56 @@ export async function GET(request: NextRequest) {
       fat:         Math.round(parseFloat(s.fat)           * 10) / 10,
       is_default:  s.is_default === '1' || s.is_default === 1,
     }))
+}
+
+export async function GET(request: NextRequest) {
+  const supabase = createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const fsIdParam  = request.nextUrl.searchParams.get('fs_food_id')
+  const foodIdParam = request.nextUrl.searchParams.get('food_id')
+
+  let fsId = fsIdParam || null
+
+  // If we have a food_id, look up the food row to get fs_food_id + cached servings
+  if (foodIdParam) {
+    const { data: food } = await supabase
+      .from('foods')
+      .select('fs_food_id, servings_json')
+      .eq('id', foodIdParam)
+      .single()
+
+    // Try cached servings_json first
+    if (food?.servings_json) {
+      try {
+        const cached = JSON.parse(food.servings_json)
+        if (Array.isArray(cached) && cached.length > 0) {
+          return NextResponse.json({ servings: cached })
+        }
+      } catch { /* fall through */ }
+    }
+
+    // Use fs_food_id from the food row if not provided in params
+    if (food?.fs_food_id) {
+      fsId = food.fs_food_id
+    }
+  }
+
+  if (!fsId) {
+    return NextResponse.json({ servings: [] })
+  }
+
+  // Fetch from FatSecret
+  const servings = await fetchFromFatSecret(fsId)
+
+  // Cache back to DB if we have a food_id
+  if (servings.length > 0 && foodIdParam) {
+    supabase.from('foods')
+      .update({ servings_json: JSON.stringify(servings) })
+      .eq('id', foodIdParam)
+      .then(() => null).catch(() => null)
+  }
 
   return NextResponse.json({ servings })
 }
