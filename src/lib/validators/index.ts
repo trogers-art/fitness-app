@@ -12,6 +12,7 @@ export const OnboardingSchema = z.object({
   target_rate_kg_per_week: z.number().min(0.1).max(1.0),
   timezone: z.string().min(1),
   units: z.enum(['imperial', 'metric']).default('imperial'),
+  target_weight_kg: z.number().min(20).max(300).optional(),
 })
 
 // ─── Food ──────────────────────────────────────────────────────────────────

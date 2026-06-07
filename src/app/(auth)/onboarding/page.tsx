@@ -54,6 +54,7 @@ export default function OnboardingPage() {
     activity_level: 'moderate',
     goal: 'fat_loss',
     target_rate: '1',
+    target_weight: '',
   })
 
   const update  = (f: string, v: string) => setForm(p => ({ ...p, [f]: v }))
@@ -90,6 +91,12 @@ export default function OnboardingPage() {
     const weight_kg = units === 'imperial'
       ? lbsToKg(parseFloat(form.weight_lbs))
       : parseFloat(form.weight_kg)
+    const target_weight_kg = form.target_weight
+      ? units === 'imperial'
+        ? lbsToKg(parseFloat(form.target_weight))
+        : parseFloat(form.target_weight)
+      : undefined
+
     const target_rate_kg_per_week = units === 'imperial'
       ? Math.round(parseFloat(form.target_rate) * 0.453592 * 100) / 100
       : parseFloat(form.target_rate)
@@ -101,7 +108,7 @@ export default function OnboardingPage() {
       body: JSON.stringify({
         age: parseInt(form.age), sex: form.sex,
         height_cm, weight_kg, activity_level: form.activity_level,
-        goal: form.goal, target_rate_kg_per_week, units,
+        goal: form.goal, target_rate_kg_per_week, target_weight_kg, units,
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       }),
     })
@@ -303,6 +310,22 @@ export default function OnboardingPage() {
                 </button>
               ))}
             </div>
+
+            {form.goal === 'fat_loss' && (
+              <div>
+                <span style={label}>Goal weight ({units === 'imperial' ? 'lbs' : 'kg'})</span>
+                <div style={{ position: 'relative', marginBottom: 16 }}>
+                  <input type="number" min={80} max={500} step="0.1"
+                    value={form.target_weight}
+                    onChange={e => update('target_weight', e.target.value)}
+                    placeholder={units === 'imperial' ? '175' : '79'}
+                    style={{ width: '100%', padding: '11px 48px 11px 14px', border: `1px solid ${C.border}`, background: C.surface, color: C.text, fontSize: 14, fontFamily: 'DM Mono, monospace', outline: 'none' }} />
+                  <span style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', fontSize: 11, color: C.textMuted }}>
+                    {units === 'imperial' ? 'lbs' : 'kg'}
+                  </span>
+                </div>
+              </div>
+            )}
 
             {form.goal === 'fat_loss' && (
               <div>

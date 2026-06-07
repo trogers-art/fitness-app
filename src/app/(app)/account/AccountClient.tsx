@@ -24,6 +24,7 @@ interface Props {
     age: number
     sex: string
     activity_level: string
+    target_weight_kg: number | null
   } | null
 }
 
@@ -59,6 +60,13 @@ export default function AccountClient({ email, emailConfirmed, profile }: Props)
   const [pwError,    setPwError]     = useState<string | null>(null)
   const [pwSuccess,  setPwSuccess]   = useState(false)
   const [themeSaved, setThemeSaved]  = useState(false)
+  const [goalWeight,  setGoalWeight]  = useState(profile?.target_weight_kg
+    ? imperial
+      ? String(Math.round(profile.target_weight_kg * 2.20462 * 10) / 10)
+      : String(profile.target_weight_kg)
+    : '')
+  const [goalSaving,  setGoalSaving]  = useState(false)
+  const [goalSaved,   setGoalSaved]   = useState(false)
 
   async function handleThemeChange(t: Theme) {
     setThemeState(t)
@@ -72,6 +80,23 @@ export default function AccountClient({ email, emailConfirmed, profile }: Props)
     })
     setThemeSaved(true)
     setTimeout(() => setThemeSaved(false), 2000)
+  }
+
+  async function handleSaveGoalWeight() {
+    if (!goalWeight) return
+    setGoalSaving(true)
+    const target_weight_kg = imperial
+      ? Math.round(parseFloat(goalWeight) / 2.20462 * 10) / 10
+      : parseFloat(goalWeight)
+    await fetch('/api/user/profile', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ target_weight_kg }),
+    })
+    setGoalSaving(false)
+    setGoalSaved(true)
+    setTimeout(() => setGoalSaved(false), 2000)
   }
 
   async function handlePasswordChange(e: React.FormEvent) {
@@ -174,6 +199,27 @@ export default function AccountClient({ email, emailConfirmed, profile }: Props)
               </div>
             ))}
           </div>
+          {/* Goal weight */}
+          {profile.goal === 'fat_loss' && (
+            <div style={{ marginTop: 12, display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+              <div style={{ flex: 1 }}>
+                <label className="label">Goal weight ({imperial ? 'lbs' : 'kg'})</label>
+                <div style={{ position: 'relative' }}>
+                  <input className="input" type="number" min={80} max={500} step="0.1"
+                    value={goalWeight} onChange={e => setGoalWeight(e.target.value)}
+                    placeholder={imperial ? '175' : '79'}
+                    style={{ paddingRight: 44 }} />
+                  <span style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', fontSize: 11, color: 'var(--text-3)' }}>
+                    {imperial ? 'lbs' : 'kg'}
+                  </span>
+                </div>
+              </div>
+              <button onClick={handleSaveGoalWeight} disabled={goalSaving || !goalWeight}
+                className="btn" style={{ fontSize: 12, padding: '10px 16px', opacity: (!goalWeight || goalSaving) ? 0.4 : 1 }}>
+                {goalSaved ? 'Saved' : goalSaving ? 'Saving...' : 'Save'}
+              </button>
+            </div>
+          )}
           <button onClick={() => router.push('/onboarding')} style={{ marginTop: 12, fontSize: 11, color: 'var(--text-3)', background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontFamily: 'DM Sans, sans-serif', textDecoration: 'underline' }}>
             Recalculate targets
           </button>

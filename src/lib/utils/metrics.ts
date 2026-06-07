@@ -91,6 +91,7 @@ export function computeMetrics(data: OnboardingFormData & { units?: string }): O
     training_day_carbs_g: trainingDayCarbsG,
     rest_day_carbs_g: restDayCarbsG,
     units: data.units || 'imperial',
+    target_weight_kg: data.target_weight_kg ?? null,
   }
 }
 

@@ -23,15 +23,20 @@ export async function PUT(request: NextRequest) {
 
   const body = await request.json()
 
-  // Theme-only update
-  if (body.theme && Object.keys(body).length === 1) {
-    const ThemeSchema = z.object({ theme: z.enum(['default', 'dark', 'light']) })
-    const parsed = ThemeSchema.safeParse(body)
-    if (!parsed.success) return NextResponse.json({ error: 'Invalid theme' }, { status: 400 })
+  // Partial update — theme or target_weight_kg
+  const partialFields = ['theme', 'target_weight_kg']
+  const isPartial = Object.keys(body).every(k => partialFields.includes(k))
+  if (isPartial) {
+    const PartialSchema = z.object({
+      theme:            z.enum(['default', 'dark', 'light']).optional(),
+      target_weight_kg: z.number().min(20).max(300).optional(),
+    })
+    const parsed = PartialSchema.safeParse(body)
+    if (!parsed.success) return NextResponse.json({ error: 'Invalid input' }, { status: 400 })
 
     const { data, error } = await supabase
       .from('user_profiles')
-      .update({ theme: parsed.data.theme, updated_at: new Date().toISOString() })
+      .update({ ...parsed.data, updated_at: new Date().toISOString() })
       .eq('user_id', user.id)
       .select().single()
 

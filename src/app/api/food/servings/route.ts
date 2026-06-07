@@ -22,15 +22,16 @@ async function fetchFromFatSecret(fsId: string): Promise<ServingOption[]> {
     : [data.food.servings.serving]
 
   return raw
-    .filter(s => s.metric_serving_unit === 'g' && parseFloat(s.metric_serving_amount || '0') > 0)
+    .filter(s => s.serving_description && parseFloat(s.calories || '0') >= 0)
     .map(s => ({
       serving_id:  s.serving_id,
       description: s.serving_description,
-      metric_g:    Math.round(parseFloat(s.metric_serving_amount) * 10) / 10,
-      calories:    Math.round(parseFloat(s.calories)),
-      protein:     Math.round(parseFloat(s.protein)      * 10) / 10,
-      carbs:       Math.round(parseFloat(s.carbohydrate)  * 10) / 10,
-      fat:         Math.round(parseFloat(s.fat)           * 10) / 10,
+      // metric_g is used for quantity tracking — use whatever amount FatSecret gives us
+      metric_g:    Math.round(parseFloat(s.metric_serving_amount || '100') * 10) / 10,
+      calories:    Math.round(parseFloat(s.calories     || '0')),
+      protein:     Math.round(parseFloat(s.protein      || '0') * 10) / 10,
+      carbs:       Math.round(parseFloat(s.carbohydrate || '0') * 10) / 10,
+      fat:         Math.round(parseFloat(s.fat          || '0') * 10) / 10,
       is_default:  s.is_default === '1' || s.is_default === 1,
     }))
 }
