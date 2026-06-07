@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { useSearchParams } from 'next/navigation'
 import ActiveSession from './ActiveSession'
 
 interface Exercise {
@@ -372,8 +373,8 @@ function ProgramBuilder({ onSaved, onCancel }: { onSaved: () => void; onCancel: 
 
 // ── Program Detail ─────────────────────────────────────────────────────────
 
-function ProgramDetail({ program, onBack, onDeleted, onStartSession }: {
-  program: Program; onBack: () => void; onDeleted: () => void
+function ProgramDetail({ program, onBack, onDeleted, onStartSession, onRefresh }: {
+  program: Program; onBack: () => void; onDeleted: () => void; onRefresh: () => void
   onStartSession: (session: Session, programId: string, programName: string) => void
 }) {
   const [deleting, setDeleting] = useState(false)
@@ -402,12 +403,35 @@ function ProgramDetail({ program, onBack, onDeleted, onStartSession }: {
             {program.goal.replace('_',' ')} · {program.days_per_week} days/wk · {program.duration_weeks} weeks
           </p>
         </div>
-        <button onClick={handleDelete} disabled={deleting}
-          style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-3)', padding: 4 }}
-          onMouseEnter={e => (e.currentTarget.style.color='var(--red)')}
-          onMouseLeave={e => (e.currentTarget.style.color='var(--text-3)')}>
-          <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M1 1l11 11M12 1L1 12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="square"/></svg>
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {/* Active toggle */}
+          <button
+            onClick={async () => {
+              const newActive = !program.active
+              await fetch(`/api/workouts/programs/${program.id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ active: newActive }),
+              })
+              onBack()
+              onRefresh()
+            }}
+            style={{
+              fontSize: 10, padding: '4px 10px', border: '1px solid',
+              borderColor: program.active ? 'var(--green)' : 'var(--border-2)',
+              color: program.active ? 'var(--green)' : 'var(--text-3)',
+              background: 'none', cursor: 'pointer', fontFamily: 'DM Sans, sans-serif',
+            }}>
+            {program.active ? 'Active' : 'Set active'}
+          </button>
+          <button onClick={handleDelete} disabled={deleting}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-3)', padding: 4 }}
+            onMouseEnter={e => (e.currentTarget.style.color='var(--red)')}
+            onMouseLeave={e => (e.currentTarget.style.color='var(--text-3)')}>
+            <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M1 1l11 11M12 1L1 12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="square"/></svg>
+          </button>
+        </div>
       </div>
 
       {sorted.map(session => (
@@ -506,7 +530,33 @@ export default function WorkoutsPage() {
     setLoading(false)
   }, [])
 
-  useEffect(() => { loadPrograms() }, [loadPrograms])
+  const searchParams = useSearchParams()
+
+  useEffect(() => {
+    loadPrograms().then(() => {
+      const startProgramId = searchParams.get('start')
+      const startSessionId = searchParams.get('session')
+      if (startProgramId && startSessionId) {
+        // Will be handled after programs load — see below
+      }
+    })
+  }, [loadPrograms, searchParams])
+
+  // Auto-launch session when navigated from dashboard
+  useEffect(() => {
+    const startProgramId = searchParams.get('start')
+    const startSessionId = searchParams.get('session')
+    if (!startProgramId || !startSessionId || programs.length === 0) return
+
+    const program = programs.find(p => p.id === startProgramId)
+    if (!program) return
+    const allSessions = program.program_weeks?.flatMap(w => w.sessions) ?? []
+    const session = allSessions.find(s => s.id === startSessionId)
+    if (!session) return
+
+    setSelected(program)
+    handleStartSession(session, program.id, `${program.name} — ${session.focus}`)
+  }, [programs, searchParams])
 
   function handleStartSession(session: Session, programId: string, name: string) {
     setActiveSession({ session, programId, name })
@@ -551,6 +601,7 @@ export default function WorkoutsPage() {
       onBack={() => setView('list')}
       onDeleted={() => { loadPrograms(); setView('list') }}
       onStartSession={handleStartSession}
+      onRefresh={loadPrograms}
     />
   )
 

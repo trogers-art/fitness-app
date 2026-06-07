@@ -31,19 +31,29 @@ const S = {
 }
 
 function ExerciseDetail({ ex, onClose }: { ex: Exercise; onClose: () => void }) {
-  const [gif, setGif] = useState<string | null>(ex.gif_url)
-  const [loadingGif, setLoadingGif] = useState(!ex.gif_url)
+  // gif_url stores either null, a legacy URL, or "edb:{id}"
+  const getEdbId = (gifUrl: string | null) => {
+    if (!gifUrl) return null
+    const match = gifUrl.match(/^edb:(\d+)$/)
+    return match ? match[1] : null
+  }
+
+  const [edbId,      setEdbId]      = useState<string | null>(() => getEdbId(ex.gif_url))
+  const [loadingGif, setLoadingGif] = useState(!getEdbId(ex.gif_url))
 
   useEffect(() => {
-    // GitHub raw URLs from seed are unreliable — always try ExerciseDB
-    const isGithubUrl = ex.gif_url?.includes('githubusercontent.com')
-    if (ex.gif_url && !isGithubUrl) return
+    // Already have a valid edb id
+    if (getEdbId(ex.gif_url)) { setEdbId(getEdbId(ex.gif_url)); setLoadingGif(false); return }
+    // Fetch edb_id from ExerciseDB via server route
     setLoadingGif(true)
     fetch(`/api/exercises/gif?exercise_id=${ex.id}&name=${encodeURIComponent(ex.name)}`, { credentials: 'include' })
       .then(r => r.json())
-      .then(d => { setGif(d.gif_url); setLoadingGif(false) })
+      .then(d => { setEdbId(d.edb_id); setLoadingGif(false) })
       .catch(() => setLoadingGif(false))
   }, [ex.id, ex.name, ex.gif_url])
+
+  // GIF src goes through our proxy — API key never exposed
+  const gifSrc = edbId ? `/api/exercises/gif-image?edb_id=${edbId}` : null
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}
@@ -67,9 +77,9 @@ function ExerciseDetail({ ex, onClose }: { ex: Exercise; onClose: () => void }) 
           <div style={{ background: 'var(--surface-2)', border: '1px solid var(--border-2)', height: 220, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             {loadingGif ? (
               <p style={{ fontSize: 11, color: 'var(--text-3)' }}>Loading animation...</p>
-            ) : gif ? (
+            ) : gifSrc ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={gif} alt={ex.name} style={{ maxHeight: 220, maxWidth: '100%', objectFit: 'contain' }} />
+              <img src={gifSrc} alt={ex.name} style={{ maxHeight: 220, maxWidth: '100%', objectFit: 'contain' }} />
             ) : (
               <p style={{ fontSize: 11, color: 'var(--text-3)' }}>No animation available</p>
             )}

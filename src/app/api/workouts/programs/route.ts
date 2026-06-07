@@ -3,12 +3,12 @@ import { createClient } from '@/lib/supabase/server'
 import { z } from 'zod'
 
 const SessionExerciseSchema = z.object({
-  exercise_id:     z.string().uuid(),
-  order_index:     z.number().int().min(0),
-  target_sets:     z.number().int().min(1).max(20),
-  target_reps:     z.string().min(1),
+  exercise_id:      z.string().uuid(),
+  order_index:      z.number().int().min(0),
+  target_sets:      z.number().int().min(1).max(20),
+  target_reps:      z.string().min(1),
   target_weight_kg: z.number().optional(),
-  rest_seconds:    z.number().int().min(30).max(600).default(90),
+  rest_seconds:     z.number().int().min(30).max(600).default(60),
 })
 
 const SessionSchema = z.object({
@@ -18,11 +18,11 @@ const SessionSchema = z.object({
 })
 
 const ProgramSchema = z.object({
-  name:          z.string().min(1).max(100),
-  goal:          z.enum(['fat_loss','muscle_gain','maintain']),
+  name:           z.string().min(1).max(100),
+  goal:           z.enum(['fat_loss','muscle_gain','maintain']),
   duration_weeks: z.number().int().min(1).max(52).default(8),
-  days_per_week: z.number().int().min(1).max(7),
-  sessions:      z.array(SessionSchema).min(1),
+  days_per_week:  z.number().int().min(1).max(7),
+  sessions:       z.array(SessionSchema).min(1),
 })
 
 export async function GET() {
@@ -62,29 +62,28 @@ export async function POST(request: NextRequest) {
 
   const { name, goal, duration_weeks, days_per_week, sessions } = parsed.data
 
-  // 1. Create program
+  // Deactivate all existing programs before creating new one
+  await supabase.from('programs').update({ active: false }).eq('user_id', user.id)
+
+  // Create program — active by default
   const { data: program, error: progErr } = await supabase
     .from('programs')
-    .insert({ user_id: user.id, name, goal, duration_weeks, days_per_week, ai_generated: false })
+    .insert({ user_id: user.id, name, goal, duration_weeks, days_per_week, ai_generated: false, active: true })
     .select('id').single()
   if (progErr || !program) return NextResponse.json({ error: 'Failed to create program' }, { status: 500 })
 
-  // 2. Create week 1 (manual programs start with one repeating week)
   const { data: week, error: weekErr } = await supabase
     .from('program_weeks')
     .insert({ program_id: program.id, week_number: 1, is_deload: false })
     .select('id').single()
   if (weekErr || !week) return NextResponse.json({ error: 'Failed to create week' }, { status: 500 })
 
-  // 3. Create sessions + exercises
   for (const session of sessions) {
-    const { data: sess, error: sessErr } = await supabase
+    const { data: sess } = await supabase
       .from('sessions')
       .insert({ program_week_id: week.id, user_id: user.id, day_of_week: session.day_of_week, focus: session.focus })
       .select('id').single()
-    if (sessErr || !sess) continue
-
-    if (session.exercises.length > 0) {
+    if (sess && session.exercises.length > 0) {
       await supabase.from('session_exercises').insert(
         session.exercises.map(ex => ({ session_id: sess.id, ...ex }))
       )

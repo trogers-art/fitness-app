@@ -131,6 +131,9 @@ Respond with ONLY valid JSON, no markdown, no explanation:
     }))
 
     // Save program to DB
+    // Deactivate existing programs before saving new AI one
+    await supabase.from('programs').update({ active: false }).eq('user_id', user.id)
+
     const { data: program, error: progErr } = await supabase
       .from('programs')
       .insert({
@@ -140,6 +143,7 @@ Respond with ONLY valid JSON, no markdown, no explanation:
         duration_weeks,
         days_per_week,
         ai_generated:  true,
+        active:        true,
       })
       .select('id').single()
 

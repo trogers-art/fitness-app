@@ -50,6 +50,12 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await request.json()
+
+  // If setting active: true, deactivate all other programs first
+  if (body.active === true) {
+    await supabase.from('programs').update({ active: false }).eq('user_id', user.id)
+  }
+
   const allowed = ['name', 'active']
   const update = Object.fromEntries(Object.entries(body).filter(([k]) => allowed.includes(k)))
 

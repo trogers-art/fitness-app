@@ -5,12 +5,25 @@ import type { UserProfile, DailyNutritionSummary, BodyMetric } from '@/lib/types
 import { computeRollingAverage } from '@/lib/utils/metrics'
 import Link from 'next/link'
 
+interface SessionExercise {
+  id: string; order_index: number; target_sets: number
+  target_reps: string; rest_seconds: number
+  exercise: { id: string; name: string; muscle_group: string; gif_url: string | null }
+}
+
+interface TodaySession {
+  id: string; day_of_week: number; focus: string
+  session_exercises: SessionExercise[]
+}
+
 interface Props {
   profile: UserProfile | null
   emailConfirmed: boolean
   todayNutrition: DailyNutritionSummary | null
   recentWeights: Pick<BodyMetric, 'weight_kg' | 'logged_at'>[]
   latestCheckin: { explanation: string; created_at: string } | null
+  activeProgram: { id: string; name: string } | null
+  todaySession: TodaySession | null
 }
 
 const kgToLbs = (kg: number) => Math.round(kg * 2.20462 * 10) / 10
@@ -39,7 +52,7 @@ function MacroBar({ label, eaten, target, color }: { label: string; eaten: numbe
   )
 }
 
-export default function DashboardClient({ profile, emailConfirmed, todayNutrition, recentWeights, latestCheckin }: Props) {
+export default function DashboardClient({ profile, emailConfirmed, todayNutrition, recentWeights, latestCheckin, activeProgram, todaySession }: Props) {
   if (!profile) return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '80px 0', gap: 16 }}>
       <p style={{ color: 'var(--text-2)', fontSize: 14 }}>No profile found.</p>
@@ -160,13 +173,23 @@ export default function DashboardClient({ profile, emailConfirmed, todayNutritio
             <p style={{ fontSize: 11, color: 'var(--text-3)', margin: '2px 0 0' }}>Quick log</p>
           </div>
         </Link>
-        <Link href="/workouts" style={{ ...L.card, display: 'flex', alignItems: 'center', gap: 12, textDecoration: 'none' }}>
-          <div style={{ width: 34, height: 34, border: '1px solid var(--border-2)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-3)', flexShrink: 0 }}>
-            <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><polygon points="2.5,1 12,6.5 2.5,12" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="miter" fill="none"/></svg>
+        <Link href={todaySession ? `/workouts?start=${activeProgram?.id}&session=${todaySession.id}` : '/workouts'}
+          style={{ ...L.card, display: 'flex', alignItems: 'center', gap: 12, textDecoration: 'none' }}>
+          <div style={{ width: 34, height: 34, border: '1px solid var(--border-2)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: todaySession ? 'var(--text)' : 'var(--text-3)', flexShrink: 0 }}>
+            {todaySession
+              ? <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><polygon points="2.5,1 12,6.5 2.5,12" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="miter" fill="none"/></svg>
+              : <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M1 6.5h11M6.5 1v11" stroke="currentColor" strokeWidth="1.2" strokeLinecap="square"/></svg>
+            }
           </div>
           <div>
-            <p style={{ fontSize: 13, fontWeight: 500, color: 'var(--text)', margin: 0 }}>Start workout</p>
-            <p style={{ fontSize: 11, color: 'var(--text-3)', margin: '2px 0 0' }}>Today&apos;s session</p>
+            <p style={{ fontSize: 13, fontWeight: 500, color: 'var(--text)', margin: 0 }}>
+              {todaySession ? todaySession.focus : 'Rest day'}
+            </p>
+            <p style={{ fontSize: 11, color: 'var(--text-3)', margin: '2px 0 0' }}>
+              {todaySession
+                ? `${todaySession.session_exercises.length} exercises · ${activeProgram?.name}`
+                : activeProgram ? activeProgram.name : 'No active program'}
+            </p>
           </div>
         </Link>
       </div>
