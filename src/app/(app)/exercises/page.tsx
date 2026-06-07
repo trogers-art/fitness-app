@@ -35,7 +35,9 @@ function ExerciseDetail({ ex, onClose }: { ex: Exercise; onClose: () => void }) 
   const [loadingGif, setLoadingGif] = useState(!ex.gif_url)
 
   useEffect(() => {
-    if (ex.gif_url) return
+    // GitHub raw URLs from seed are unreliable — always try ExerciseDB
+    const isGithubUrl = ex.gif_url?.includes('githubusercontent.com')
+    if (ex.gif_url && !isGithubUrl) return
     setLoadingGif(true)
     fetch(`/api/exercises/gif?exercise_id=${ex.id}&name=${encodeURIComponent(ex.name)}`, { credentials: 'include' })
       .then(r => r.json())

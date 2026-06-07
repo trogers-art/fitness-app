@@ -22,8 +22,8 @@ create table if not exists public.workout_log_sets (
   logged_at       timestamptz not null default now()
 );
 
-create index workout_logs_user_id_idx on public.workout_logs(user_id);
-create index workout_log_sets_log_id_idx on public.workout_log_sets(workout_log_id);
+create index if not exists workout_logs_user_id_idx on public.workout_logs(user_id);
+create index if not exists workout_log_sets_log_id_idx on public.workout_log_sets(workout_log_id);
 
 alter table public.workout_logs enable row level security;
 alter table public.workout_log_sets enable row level security;
