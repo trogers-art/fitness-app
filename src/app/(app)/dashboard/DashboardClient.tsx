@@ -63,7 +63,7 @@ export default function DashboardClient({ profile, emailConfirmed, todayNutritio
   const imperial = profile.units === 'imperial'
   const n = todayNutrition || { total_calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0, workout_calories_burned: 0 }
   const net = n.total_calories - n.workout_calories_burned
-  const remaining = (profile.daily_calories ?? 0) - net  
+  const remaining = (profile.daily_calories ?? 0) - net
   const over = remaining < 0
 
   const rollingKg = computeRollingAverage(recentWeights.map(w => ({ date: w.logged_at, weight_kg: w.weight_kg })))
@@ -101,7 +101,7 @@ export default function DashboardClient({ profile, emailConfirmed, todayNutritio
           <div style={{ display: 'flex', gap: 14, fontSize: 10, color: 'var(--text-3)', fontFamily: 'DM Mono, monospace' }}>
             <span>Eaten <span style={{ color: 'var(--text-2)' }}>{n.total_calories}</span></span>
             <span>Burned <span style={{ color: 'var(--text-2)' }}>{n.workout_calories_burned}</span></span>
-            <span>Target <span style={{ color: 'var(--text-2)' }}>{profile.daily_calories}</span></span>
+            <span>Target <span style={{ color: 'var(--text-2)' }}>{(profile.daily_calories ?? 0)}</span></span>
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 12 }}>
@@ -111,16 +111,16 @@ export default function DashboardClient({ profile, emailConfirmed, todayNutritio
           <span style={{ fontSize: 11, color: 'var(--text-3)' }}>kcal {over ? 'over' : 'left'}</span>
         </div>
         <div style={{ height: 1, background: 'var(--border-2)' }}>
-          <div style={{ height: '100%', width: `${Math.min(100, (net / profile.daily_calories) * 100)}%`, background: over ? 'var(--red)' : 'var(--text)', transition: 'width 0.7s ease' }} />
+          <div style={{ height: '100%', width: `${Math.min(100, (net / (profile.daily_calories ?? 1)) * 100)}%`, background: over ? 'var(--red)' : 'var(--text)', transition: 'width 0.7s ease' }} />
         </div>
       </div>
 
       {/* Macros */}
       <div style={{ ...L.card, display: 'flex', flexDirection: 'column', gap: 12 }}>
         <span style={L.label}>Macros</span>
-        <MacroBar label="Protein" eaten={n.protein_g} target={profile.protein_g} color="var(--blue)" />
-        <MacroBar label="Carbs"   eaten={n.carbs_g}   target={profile.carbs_g}   color="var(--amber)" />
-        <MacroBar label="Fat"     eaten={n.fat_g}     target={profile.fat_g}     color="var(--red)" />
+        <MacroBar label="Protein" eaten={n.protein_g} target={profile.protein_g ?? 0} color="var(--blue)" />
+        <MacroBar label="Carbs"   eaten={n.carbs_g}   target={profile.carbs_g ?? 0}   color="var(--amber)" />
+        <MacroBar label="Fat"     eaten={n.fat_g}     target={profile.fat_g ?? 0}     color="var(--red)" />
       </div>
 
       {/* Weight chart */}
