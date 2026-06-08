@@ -8,13 +8,9 @@ export async function GET() {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { data: plan } = await supabase
-    .from('ai_plans')
-    .select('id, plan_data, created_at')
-    .eq('user_id', user.id)
-    .eq('plan_type', 'food')
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .single()
+    .from('ai_plans').select('id, plan_data, created_at')
+    .eq('user_id', user.id).eq('plan_type', 'food')
+    .order('created_at', { ascending: false }).limit(1).single()
 
   return NextResponse.json({ plan: plan || null })
 }
@@ -27,11 +23,8 @@ export async function PUT(request: NextRequest) {
   const { plan_id, plan_data } = await request.json()
   if (!plan_id || !plan_data) return NextResponse.json({ error: 'Missing fields' }, { status: 400 })
 
-  const { error } = await supabase
-    .from('ai_plans')
-    .update({ plan_data })
-    .eq('id', plan_id)
-    .eq('user_id', user.id)
+  const { error } = await supabase.from('ai_plans').update({ plan_data })
+    .eq('id', plan_id).eq('user_id', user.id)
 
   if (error) return NextResponse.json({ error: 'Save failed' }, { status: 500 })
   return NextResponse.json({ success: true })
@@ -61,10 +54,8 @@ export async function POST() {
   }
 
   const DAY_NAMES = ['','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday']
-  const restDays  = [1,2,3,4,5,6,7].filter(d => !trainingDays.includes(d))
-  const imperial  = profile.units === 'imperial'
+  const imperial   = profile.units === 'imperial'
   const weightDisp = imperial ? `${Math.round((profile.weight_kg||80)*2.20462)}lbs` : `${profile.weight_kg}kg`
-
   const trainCals  = profile.daily_calories
   const restCals   = Math.round(profile.daily_calories * 0.85)
   const protein    = profile.protein_g
@@ -72,57 +63,46 @@ export async function POST() {
   const restCarbs  = Math.round(profile.carbs_g * 0.75)
   const fat        = profile.fat_g
 
-  // Meal types to generate
-  const baseMealTypes = [
-    { type: 'breakfast',   label: 'Breakfast',    training: true, rest: true  },
-    { type: 'lunch',       label: 'Lunch',        training: true, rest: true  },
-    { type: 'dinner',      label: 'Dinner',       training: true, rest: true  },
-    { type: 'snack',       label: 'Snack',        training: false,rest: true  },
-    { type: 'pre_workout', label: 'Pre-workout',  training: true, rest: false },
-    { type: 'post_workout',label: 'Post-workout', training: true, rest: false },
+  // Meal type definitions
+  const MEAL_TYPES = [
+    { type: 'breakfast',    label: 'Breakfast',    alloc: 0.25, training: true,  rest: true  },
+    { type: 'lunch',        label: 'Lunch',        alloc: 0.30, training: true,  rest: true  },
+    { type: 'dinner',       label: 'Dinner',       alloc: 0.30, training: true,  rest: true  },
+    { type: 'snack',        label: 'Snack',        alloc: 0.10, training: false, rest: true  },
+    { type: 'pre_workout',  label: 'Pre-workout',  alloc: 0.12, training: true,  rest: false },
+    { type: 'post_workout', label: 'Post-workout', alloc: 0.15, training: true,  rest: false },
   ]
 
-  // Build day context string
-  const dayContext = [1,2,3,4,5,6,7].map(d => {
-    const isTrain = trainingDays.includes(d)
-    return `${DAY_NAMES[d]}(${isTrain?'training':'rest'} ${isTrain?trainCals:restCals}kcal)`
-  }).join(', ')
+  // Delete old and create new plan record
+  await supabase.from('ai_plans').delete().eq('user_id', user.id).eq('plan_type', 'food')
+  const { data: planRecord } = await supabase
+    .from('ai_plans')
+    .insert({ user_id: user.id, plan_type: 'food', plan_data: { training_days: trainingDays, days: [], notes: '' } })
+    .select('id').single()
+  const planId = planRecord?.id
 
-  // SSE stream
+  // Build day structure
+  const dayMap: Record<number, any> = {}
+  for (let d = 1; d <= 7; d++) {
+    const isTrain = trainingDays.includes(d)
+    dayMap[d] = {
+      day_of_week: d, day_name: DAY_NAMES[d], is_training: isTrain,
+      target_calories: isTrain ? trainCals : restCals,
+      target_protein: protein,
+      target_carbs: isTrain ? trainCarbs : restCarbs,
+      target_fat: fat,
+      meals: [],
+    }
+  }
+
   const encoder = new TextEncoder()
   const stream  = new ReadableStream({
     async start(controller) {
-      const send = (data: object) => {
+      const send = (data: object) =>
         controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`))
-      }
 
-      // Structure: days[dow] = { meals: { meal_type: { options: [...] } } }
-      const dayMap: Record<number, any> = {}
-      for (let d = 1; d <= 7; d++) {
-        const isTrain = trainingDays.includes(d)
-        dayMap[d] = {
-          day_of_week:     d,
-          day_name:        DAY_NAMES[d],
-          is_training:     isTrain,
-          target_calories: isTrain ? trainCals : restCals,
-          target_protein:  protein,
-          target_carbs:    isTrain ? trainCarbs : restCarbs,
-          target_fat:      fat,
-          meals:           [],
-        }
-      }
-
-      // Delete old plan and create new record
-      await supabase.from('ai_plans').delete().eq('user_id', user.id).eq('plan_type', 'food')
-      const { data: planRecord } = await supabase
-        .from('ai_plans')
-        .insert({ user_id: user.id, plan_type: 'food', plan_data: { training_days: trainingDays, days: [], notes: '' } })
-        .select('id').single()
-      const planId = planRecord?.id
-
-      // Generate one meal type at a time across all 7 days
-      for (const mealDef of baseMealTypes) {
-        // Skip if not applicable to any day
+      // Generate ONE meal type for ONE day at a time
+      for (const mealDef of MEAL_TYPES) {
         const applicableDays = [1,2,3,4,5,6,7].filter(d => {
           const isTrain = trainingDays.includes(d)
           return (isTrain && mealDef.training) || (!isTrain && mealDef.rest)
@@ -131,78 +111,67 @@ export async function POST() {
 
         send({ type: 'progress', meal_type: mealDef.type, label: mealDef.label })
 
-        // Build per-day targets for this meal type
-        const dayTargets = applicableDays.map(d => {
-          const isTrain = trainingDays.includes(d)
-          const cals = isTrain ? trainCals : restCals
-          const carbs = isTrain ? trainCarbs : restCarbs
-          // Rough per-meal allocation
-          const mealAllocs: Record<string, number> = {
-            breakfast: 0.25, lunch: 0.30, dinner: 0.30,
-            snack: 0.10, pre_workout: 0.10, post_workout: 0.15,
-          }
-          const alloc = mealAllocs[mealDef.type] || 0.2
-          return `${DAY_NAMES[d]}: ${Math.round(cals*alloc)}kcal ${Math.round(protein*alloc)}p ${Math.round(carbs*alloc)}c ${Math.round(fat*alloc)}f`
-        }).join(' | ')
+        const dayMeals: Record<number, any> = {}
 
-        const prompt = `Sports dietitian. Generate ${mealDef.label} options for all applicable days. JSON only, no markdown.
+        for (const dow of applicableDays) {
+          const isTrain = trainingDays.includes(dow)
+          const cals    = isTrain ? trainCals : restCals
+          const carbs   = isTrain ? trainCarbs : restCarbs
+          const mCals   = Math.round(cals   * mealDef.alloc)
+          const mProt   = Math.round(protein * mealDef.alloc)
+          const mCarbs  = Math.round(carbs   * mealDef.alloc)
+          const mFat    = Math.round(fat     * mealDef.alloc)
+
+          const prompt = `Sports dietitian. Generate ${mealDef.label} for ${DAY_NAMES[dow]} (${isTrain?'training':'rest'} day). JSON only.
 
 User: Goal=${profile.goal.replace('_',' ')} Weight=${weightDisp}
-Week: ${dayContext}
-This meal type: ${mealDef.label}
-Applicable days + targets: ${dayTargets}
+Target: ${mCals}kcal | ${mProt}g protein | ${mCarbs}g carbs | ${mFat}g fat
 
-Rules:
-- Each day gets 2 options (option_key "a" and "b")
-- Each option has 2-4 foods with accurate macros
-- Vary foods significantly across all days — no repeating same option
-- Foods should be practical and realistic
-- Macros per option should match the day's target for this meal
+Generate 2 different meal options. Each option: 2-3 foods, accurate macros, realistic servings.
+Options must be varied — different foods from each other.
 
-JSON format:
-{"meal_type":"${mealDef.type}","label":"${mealDef.label}","days":[{"day_of_week":1,"options":[{"option_key":"a","label":"NAME","total_calories":0,"total_protein":0,"total_carbs":0,"total_fat":0,"foods":[{"id":"f1","name":"FOOD","serving":"SERVING","calories":0,"protein":0,"carbs":0,"fat":0}]},{"option_key":"b","label":"NAME","total_calories":0,"total_protein":0,"total_carbs":0,"total_fat":0,"foods":[]}]}]}`
+{"options":[{"option_key":"a","label":"MEAL NAME","total_calories":0,"total_protein":0,"total_carbs":0,"total_fat":0,"foods":[{"id":"f1","name":"FOOD","serving":"AMOUNT","calories":0,"protein":0,"carbs":0,"fat":0}]},{"option_key":"b","label":"MEAL NAME","total_calories":0,"total_protein":0,"total_carbs":0,"total_fat":0,"foods":[]}]}`
 
-        try {
-          const message = await anthropic.messages.create({
-            model:      'claude-sonnet-4-20250514',
-            max_tokens: 4000,
-            messages:   [{ role: 'user', content: prompt }],
-          })
+          try {
+            const message = await anthropic.messages.create({
+              model: 'claude-sonnet-4-20250514', max_tokens: 1200,
+              messages: [{ role: 'user', content: prompt }],
+            })
+            const text   = message.content.find((b: any) => b.type === 'text')?.text ?? ''
+            const clean  = text.replace(/```json|```/g, '').trim()
+            const result = JSON.parse(clean)
+            dayMeals[dow] = result.options || []
+          } catch (e) {
+            console.error(`${mealDef.label} day ${dow} error:`, e)
+            dayMeals[dow] = []
+          }
+        }
 
-          const text  = message.content.find((b: any) => b.type === 'text')?.text ?? ''
-          const clean = text.replace(/```json|```/g, '').trim()
-          const result = JSON.parse(clean)
-
-          // Merge into dayMap
-          for (const dayResult of (result.days || [])) {
-            const dow = dayResult.day_of_week
-            if (!dayMap[dow]) continue
+        // Merge into dayMap
+        for (const dow of applicableDays) {
+          if (dayMeals[dow]?.length) {
             dayMap[dow].meals.push({
               meal_type: mealDef.type,
               label:     mealDef.label,
-              options:   dayResult.options || [],
+              options:   dayMeals[dow],
             })
           }
-
-          // Save incremental progress
-          const days = Object.values(dayMap).filter((d: any) => d.meals.length > 0)
-          if (planId) {
-            await supabase.from('ai_plans')
-              .update({ plan_data: { training_days: trainingDays, days, notes: '' } })
-              .eq('id', planId)
-          }
-
-          send({ type: 'meal_done', meal_type: mealDef.type, label: mealDef.label, days: result.days })
-
-        } catch (e) {
-          console.error(`${mealDef.label} generation error:`, e)
-          send({ type: 'error', meal_type: mealDef.type, label: mealDef.label })
         }
+
+        // Save progress
+        const days = Object.values(dayMap)
+        if (planId) {
+          await supabase.from('ai_plans')
+            .update({ plan_data: { training_days: trainingDays, days, notes: '' } })
+            .eq('id', planId)
+        }
+
+        send({ type: 'meal_done', meal_type: mealDef.type, label: mealDef.label })
       }
 
-      const notes = `${profile.goal === 'fat_loss' ? 'Calorie deficit maintained. ' : ''}Protein prioritised at every meal. Training days have higher carbs for performance and recovery.`
+      const notes = `${profile.goal === 'fat_loss' ? 'Calorie deficit maintained. ' : ''}Protein prioritised at every meal. Training days have higher carbs for energy and recovery.`
+      const days  = Object.values(dayMap)
       if (planId) {
-        const days = Object.values(dayMap)
         await supabase.from('ai_plans')
           .update({ plan_data: { training_days: trainingDays, days, notes } })
           .eq('id', planId)
