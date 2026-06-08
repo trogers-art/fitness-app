@@ -486,7 +486,7 @@ export default function MealPlan() {
                         <FoodItem key={food.id||foodIdx} food={food}
                           onUpdate={(f,v) => updateFood(dayIdx, realMealIdx, optIdx, foodIdx, f, v)}
                           onDelete={() => deleteFood(dayIdx, realMealIdx, optIdx, foodIdx)}
-                          onSwap={() => setSwapTarget({ dayIdx, mealIdx: realMealIdx, optIdx, foodIdx })}
+                          onSwap={(() => setSwapTarget({ dayIdx, mealIdx: realMealIdx, optIdx, foodIdx })) as () => void}
                         />
                       ))}
                       <div style={{ padding: '6px 14px' }}>
