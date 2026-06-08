@@ -14,7 +14,7 @@ export interface ServingOption {
 }
 
 async function fetchFromFatSecret(fsId: string): Promise<ServingOption[]> {
-  const data = await fatSecretPOST('food.get.v4', { food_id: fsId })
+  const data = await fatSecretPOST('food.get.v4', { food_id: fsId, include_food_images: 'false' })
   if (!data?.food?.servings?.serving) return []
 
   const raw: any[] = Array.isArray(data.food.servings.serving)
@@ -22,11 +22,10 @@ async function fetchFromFatSecret(fsId: string): Promise<ServingOption[]> {
     : [data.food.servings.serving]
 
   return raw
-    .filter(s => s.serving_description && parseFloat(s.calories || '0') >= 0)
-    .map(s => ({
+    .filter((s: any) => s.serving_description && parseFloat(s.calories || '0') >= 0)
+    .map((s: any) => ({
       serving_id:  s.serving_id,
       description: s.serving_description,
-      // metric_g is used for quantity tracking — use whatever amount FatSecret gives us
       metric_g:    Math.round(parseFloat(s.metric_serving_amount || '100') * 10) / 10,
       calories:    Math.round(parseFloat(s.calories     || '0')),
       protein:     Math.round(parseFloat(s.protein      || '0') * 10) / 10,
@@ -46,13 +45,9 @@ export async function GET(request: NextRequest) {
 
   let fsId = fsIdParam || null
 
-  // If we have a food_id, look up the food row to get fs_food_id + cached servings
   if (foodIdParam) {
     const { data: food } = await supabase
-      .from('foods')
-      .select('fs_food_id, servings_json')
-      .eq('id', foodIdParam)
-      .single()
+      .from('foods').select('fs_food_id, servings_json').eq('id', foodIdParam).single()
 
     // Try cached servings_json first
     if (food?.servings_json) {
@@ -64,20 +59,14 @@ export async function GET(request: NextRequest) {
       } catch { /* fall through */ }
     }
 
-    // Use fs_food_id from the food row if not provided in params
-    if (food?.fs_food_id) {
-      fsId = food.fs_food_id
-    }
+    if (food?.fs_food_id) fsId = food.fs_food_id
   }
 
-  if (!fsId) {
-    return NextResponse.json({ servings: [] })
-  }
+  if (!fsId) return NextResponse.json({ servings: [] })
 
-  // Fetch from FatSecret
   const servings = await fetchFromFatSecret(fsId)
 
-  // Cache back to DB if we have a food_id
+  // Cache back
   if (servings.length > 0 && foodIdParam) {
     supabase.from('foods')
       .update({ servings_json: JSON.stringify(servings) })
