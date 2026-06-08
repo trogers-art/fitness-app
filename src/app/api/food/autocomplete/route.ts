@@ -10,13 +10,14 @@ export async function GET(request: NextRequest) {
   const q = request.nextUrl.searchParams.get('q')?.trim()
   if (!q || q.length < 2) return NextResponse.json({ suggestions: [] })
 
-  const data = await fatSecretPOST('foods.autocomplete.v2', {
-    expression: q,
+  const data = await fatSecretPOST('foods.autocomplete', {
+    expression:  q,
     max_results: '8',
-    language:    'en',
-    region:      'US',
+    format:      'json',
   })
 
-  const suggestions: string[] = data?.suggestions?.suggestion || []
-  return NextResponse.json({ suggestions: Array.isArray(suggestions) ? suggestions : [suggestions] })
+  const raw = data?.suggestions?.suggestion
+  if (!raw) return NextResponse.json({ suggestions: [] })
+  const suggestions: string[] = Array.isArray(raw) ? raw : [raw]
+  return NextResponse.json({ suggestions })
 }

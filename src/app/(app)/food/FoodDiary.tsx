@@ -359,6 +359,22 @@ export default function FoodDiary({ profile }: { profile: Profile | null }) {
                     </button>
                   </div>
 
+                  {mealEntries.length > 0 && (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', background: 'var(--surface-2)', borderBottom: '1px solid var(--border)' }}>
+                      {[
+                        { label: 'Calories', value: mealCals, color: 'var(--text)', unit: '' },
+                        { label: 'Protein',  value: Math.round(mealEntries.reduce((s,e) => s + calcNutrition(e).protein, 0) * 10) / 10, color: 'var(--blue)',  unit: 'g' },
+                        { label: 'Carbs',    value: Math.round(mealEntries.reduce((s,e) => s + calcNutrition(e).carbs,   0) * 10) / 10, color: 'var(--amber)', unit: 'g' },
+                        { label: 'Fat',      value: Math.round(mealEntries.reduce((s,e) => s + calcNutrition(e).fat,     0) * 10) / 10, color: 'var(--red)',   unit: 'g' },
+                      ].map((m, i) => (
+                        <div key={m.label} style={{ padding: '7px 14px', borderRight: i < 3 ? '1px solid var(--border)' : 'none' }}>
+                          <p style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.1em', fontWeight: 500, color: m.color, margin: '0 0 2px' }}>{m.label}</p>
+                          <p style={{ fontSize: 15, fontFamily: 'DM Mono, monospace', fontWeight: 500, color: m.color, margin: 0, lineHeight: 1 }}>{m.value}{m.unit}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
                   {mealEntries.map(entry => {
                     const n = calcNutrition(entry)
                     return (
