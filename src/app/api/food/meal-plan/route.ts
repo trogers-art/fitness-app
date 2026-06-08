@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { createClient as createServiceClient } from '@supabase/supabase-js'
 import Anthropic from '@anthropic-ai/sdk'
 
 export async function GET() {
@@ -35,6 +36,12 @@ export async function POST() {
   const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return new Response('Unauthorized', { status: 401 })
+
+  // Service role client needed for writes in streaming context (bypasses RLS correctly)
+  const serviceClient = createServiceClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  )
 
   const { data: profile } = await supabase
     .from('user_profiles')
@@ -74,8 +81,8 @@ export async function POST() {
   ]
 
   // Delete old and create new plan record
-  await supabase.from('ai_plans').delete().eq('user_id', user.id).eq('plan_type', 'food')
-  const { data: planRecord } = await supabase
+  await serviceClient.from('ai_plans').delete().eq('user_id', user.id).eq('plan_type', 'food')
+  const { data: planRecord } = await serviceClient
     .from('ai_plans')
     .insert({ user_id: user.id, plan_type: 'food', plan_data: { training_days: trainingDays, days: [], notes: '' } })
     .select('id').single()
@@ -143,7 +150,7 @@ Options must be varied — different foods from each other.
             dayMeals[dow] = result.options || []
           } catch (e) {
             console.error(`${mealDef.label} day ${dow} error:`, e)
-            dayMeals[dow] = []
+              dayMeals[dow] = []
           }
         }
 
@@ -161,9 +168,11 @@ Options must be varied — different foods from each other.
         // Save progress
         const days = Object.values(dayMap)
         if (planId) {
-          await supabase.from('ai_plans')
-            .update({ plan_data: { training_days: trainingDays, days, notes: '' } })
+          const saveData = { training_days: trainingDays, days, notes: '' }
+          const { error: updateErr } = await serviceClient.from('ai_plans')
+            .update({ plan_data: saveData as any })
             .eq('id', planId)
+          console.log('[meal-plan] update result:', updateErr ? updateErr.message : 'ok', 'planId:', planId, 'days:', days.length)
         }
 
         send({ type: 'meal_done', meal_type: mealDef.type, label: mealDef.label })
@@ -172,8 +181,9 @@ Options must be varied — different foods from each other.
       const notes = `${profile.goal === 'fat_loss' ? 'Calorie deficit maintained. ' : ''}Protein prioritised at every meal. Training days have higher carbs for energy and recovery.`
       const days  = Object.values(dayMap)
       if (planId) {
-        await supabase.from('ai_plans')
-          .update({ plan_data: { training_days: trainingDays, days, notes } })
+        const finalData = { training_days: trainingDays, days, notes }
+        await serviceClient.from('ai_plans')
+          .update({ plan_data: finalData as any })
           .eq('id', planId)
       }
 

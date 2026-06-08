@@ -358,19 +358,12 @@ export default function MealPlan() {
           }
           if (event.type === 'meal_done') {
             setGenProgress(prev => prev.map(p => p.type===event.meal_type ? { ...p, done: true } : p))
-            // Fetch updated plan
-            const r = await fetch('/api/food/meal-plan', { credentials: 'include' })
-            const d = await r.json()
-            if (d.plan) setPlan(d.plan)
           }
           if (event.type === 'error') {
             setGenProgress(prev => prev.map(p => p.type===event.meal_type ? { ...p, done: true } : p))
           }
           if (event.type === 'done') {
             planId = event.plan_id
-            const r = await fetch('/api/food/meal-plan', { credentials: 'include' })
-            const d = await r.json()
-            if (d.plan) setPlan(d.plan)
           }
         } catch { /* skip */ }
       }
