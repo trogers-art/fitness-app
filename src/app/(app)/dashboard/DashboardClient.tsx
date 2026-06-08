@@ -17,7 +17,7 @@ interface TodaySession {
 }
 
 interface Props {
-  profile: UserProfile | null
+  profile: Partial<UserProfile> | null
   emailConfirmed: boolean
   todayNutrition: DailyNutritionSummary | null
   recentWeights: Pick<BodyMetric, 'weight_kg' | 'logged_at'>[]

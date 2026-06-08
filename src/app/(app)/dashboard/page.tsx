@@ -59,7 +59,7 @@ export default async function DashboardPage() {
 
   return (
     <DashboardClient
-      profile={profileRes.data}
+      profile={profileRes.data as any}
       emailConfirmed={!!user.email_confirmed_at}
       todayNutrition={nutritionRes.data}
       recentWeights={weightsRes.data || []}
