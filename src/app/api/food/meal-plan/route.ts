@@ -7,7 +7,6 @@ export async function GET() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  // Return the most recent saved meal plan
   const { data: plan } = await supabase
     .from('ai_plans')
     .select('id, plan_data, created_at')
@@ -20,24 +19,42 @@ export async function GET() {
   return NextResponse.json({ plan: plan || null })
 }
 
-export async function POST() {
-  const supabase   = createClient()
-  const anthropic  = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+export async function PUT(request: NextRequest) {
+  // Save edited plan back to DB
+  const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  // Fetch profile
+  const { plan_id, plan_data } = await request.json()
+  if (!plan_id || !plan_data) return NextResponse.json({ error: 'Missing plan_id or plan_data' }, { status: 400 })
+
+  const { error } = await supabase
+    .from('ai_plans')
+    .update({ plan_data })
+    .eq('id', plan_id)
+    .eq('user_id', user.id)
+
+  if (error) return NextResponse.json({ error: 'Save failed' }, { status: 500 })
+  return NextResponse.json({ success: true })
+}
+
+export async function POST() {
+  const supabase  = createClient()
+  const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
   const { data: profile } = await supabase
     .from('user_profiles')
-    .select('goal, units, daily_calories, protein_g, carbs_g, fat_g, training_day_carbs_g, rest_day_carbs_g, weight_kg, activity_level')
+    .select('goal, units, daily_calories, protein_g, carbs_g, fat_g, weight_kg, activity_level')
     .eq('user_id', user.id).single()
 
   if (!profile) return NextResponse.json({ error: 'No profile found' }, { status: 400 })
 
-  // Fetch active program to determine training days
+  // Fetch active program training days
   const { data: activeProgram } = await supabase
     .from('programs')
-    .select(`program_weeks ( sessions ( day_of_week, focus ) )`)
+    .select('name, program_weeks ( sessions ( day_of_week, focus ) )')
     .eq('user_id', user.id)
     .eq('active', true)
     .single()
@@ -47,77 +64,106 @@ export async function POST() {
     const sessions = activeProgram.program_weeks?.flatMap((w: any) => w.sessions) ?? []
     sessions.forEach((s: any) => { if (!trainingDays.includes(s.day_of_week)) trainingDays.push(s.day_of_week) })
   }
-  const dayNames = ['','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday']
-  const trainingDayNames = trainingDays.map(d => dayNames[d]).join(', ') || 'not set'
-  const restDayNames     = [1,2,3,4,5,6,7].filter(d => !trainingDays.includes(d)).map(d => dayNames[d]).join(', ')
+
+  const DAY_NAMES = ['','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday']
+  const restDays  = [1,2,3,4,5,6,7].filter(d => !trainingDays.includes(d))
 
   const imperial = profile.units === 'imperial'
-  const weightDisplay = imperial
-    ? `${Math.round(profile.weight_kg * 2.20462)} lbs`
-    : `${profile.weight_kg} kg`
+  const weightLbs = Math.round((profile.weight_kg || 80) * 2.20462)
 
-  // Training day macros — higher carbs
-  const trainingCarbs = profile.training_day_carbs_g || profile.carbs_g
-  const restCarbs     = profile.rest_day_carbs_g     || Math.round(profile.carbs_g * 0.8)
+  // Compute macros
+  const trainCals   = profile.daily_calories
+  const restCals    = Math.round(profile.daily_calories * 0.85)
+  const protein     = profile.protein_g
+  const trainCarbs  = profile.carbs_g
+  const restCarbs   = Math.round(profile.carbs_g * 0.75)
+  const fat         = profile.fat_g
 
-  const prompt = `You are a registered dietitian. Generate a detailed meal plan for a fitness-focused individual.
+  const prompt = `You are an expert sports dietitian. Generate a COMPLETE 7-day meal plan with variety.
 
-USER PROFILE:
-- Goal: ${profile.goal.replace('_',' ')}
-- Weight: ${weightDisplay}
-- Activity: ${profile.activity_level}
-- Training days: ${trainingDayNames}
-- Rest days: ${restDayNames}
+USER:
+- Goal: ${profile.goal.replace('_', ' ')}
+- Weight: ${imperial ? weightLbs + ' lbs' : profile.weight_kg + ' kg'}
+- Training days (${trainingDays.map(d => DAY_NAMES[d]).join(', ') || 'none set'}): ${trainCals} kcal | ${protein}g protein | ${trainCarbs}g carbs | ${fat}g fat
+- Rest days (${restDays.map(d => DAY_NAMES[d]).join(', ') || 'none set'}): ${restCals} kcal | ${protein}g protein | ${restCarbs}g carbs | ${fat}g fat
+- Active program: ${activeProgram?.name || 'none'}
 
-TRAINING DAY TARGETS: ${profile.daily_calories} kcal | ${profile.protein_g}g protein | ${trainingCarbs}g carbs | ${profile.fat_g}g fat
-REST DAY TARGETS: ${Math.round(profile.daily_calories * 0.85)} kcal | ${profile.protein_g}g protein | ${restCarbs}g carbs | ${Math.round(profile.fat_g * 1.1)}g fat
+RULES:
+1. Generate ALL 7 days (day_of_week 1=Monday through 7=Sunday)
+2. Each meal slot gets EXACTLY 3 options (option_a, option_b, option_c)
+3. Each option must hit the day's macro targets when all meals are summed
+4. Use VARIED foods across days — no repeating the same option across multiple days
+5. Training days include pre_workout and post_workout meals. Rest days do not.
+6. Meal types: breakfast, lunch, dinner, snack, pre_workout (training only), post_workout (training only)
+7. Each food item needs realistic serving descriptions and accurate macros
+8. Make it practical — real foods, reasonable prep time
 
-Generate a realistic, practical meal plan with whole foods. Include pre/post workout meals on training days.
-Each food item must have a realistic serving description and macros.
-
-Respond with ONLY valid JSON, no markdown:
+Respond with ONLY valid JSON, no markdown, no explanation:
 {
-  "training_day": {
-    "total_calories": 2180,
-    "total_protein": 185,
-    "total_carbs": 240,
-    "total_fat": 58,
-    "meals": [
-      {
-        "meal_type": "breakfast",
-        "label": "Breakfast",
-        "total_calories": 520,
-        "total_protein": 45,
-        "total_carbs": 72,
-        "total_fat": 8,
-        "foods": [
-          {
-            "name": "Oats",
-            "serving": "100g dry",
-            "calories": 380,
-            "protein": 13,
-            "carbs": 66,
-            "fat": 7
-          }
-        ]
-      }
-    ]
-  },
-  "rest_day": {
-    "total_calories": 1780,
-    "total_protein": 180,
-    "total_carbs": 160,
-    "total_fat": 62,
-    "meals": []
-  },
   "training_days": ${JSON.stringify(trainingDays)},
-  "notes": "Brief overall nutrition note"
+  "days": [
+    {
+      "day_of_week": 1,
+      "day_name": "Monday",
+      "is_training": true,
+      "target_calories": ${trainCals},
+      "target_protein": ${protein},
+      "target_carbs": ${trainCarbs},
+      "target_fat": ${fat},
+      "meals": [
+        {
+          "meal_type": "breakfast",
+          "label": "Breakfast",
+          "options": [
+            {
+              "option_key": "a",
+              "label": "Oats & Protein",
+              "total_calories": 480,
+              "total_protein": 42,
+              "total_carbs": 58,
+              "total_fat": 9,
+              "foods": [
+                {
+                  "id": "unique_string_id",
+                  "name": "Rolled oats",
+                  "serving": "80g dry",
+                  "calories": 304,
+                  "protein": 10,
+                  "carbs": 53,
+                  "fat": 6
+                }
+              ]
+            },
+            {
+              "option_key": "b",
+              "label": "Eggs & Toast",
+              "total_calories": 490,
+              "total_protein": 38,
+              "total_carbs": 44,
+              "total_fat": 18,
+              "foods": []
+            },
+            {
+              "option_key": "c",
+              "label": "Greek Yogurt Bowl",
+              "total_calories": 470,
+              "total_protein": 40,
+              "total_carbs": 52,
+              "total_fat": 8,
+              "foods": []
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "notes": "Brief overall nutrition strategy note"
 }`
 
   try {
     const message = await anthropic.messages.create({
       model:      'claude-sonnet-4-20250514',
-      max_tokens: 4000,
+      max_tokens: 8000,
       messages:   [{ role: 'user', content: prompt }],
     })
 
@@ -125,18 +171,21 @@ Respond with ONLY valid JSON, no markdown:
     const clean = text.replace(/```json|```/g, '').trim()
     const plan  = JSON.parse(clean)
 
-    // Save to ai_plans table
+    // Delete old food plans for this user
+    await supabase.from('ai_plans').delete().eq('user_id', user.id).eq('plan_type', 'food')
+
     const { data: saved } = await supabase
       .from('ai_plans')
-      .insert({
-        user_id:   user.id,
-        plan_type: 'food',
-        plan_data: plan,
-      })
+      .insert({ user_id: user.id, plan_type: 'food', plan_data: plan })
       .select('id, created_at').single()
 
-    const created_at = saved?.created_at || new Date().toISOString()
-    return NextResponse.json({ plan: { id: saved?.id, plan_data: plan, created_at } })
+    return NextResponse.json({
+      plan: {
+        id:         saved?.id,
+        plan_data:  plan,
+        created_at: saved?.created_at || new Date().toISOString(),
+      }
+    })
   } catch (e) {
     console.error('Meal plan generation error:', e)
     return NextResponse.json({ error: 'Generation failed' }, { status: 500 })
