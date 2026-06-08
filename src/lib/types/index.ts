@@ -29,8 +29,8 @@ export interface UserProfile {
   rest_day_carbs_g: number
   // preferences
   units: 'imperial' | 'metric'
-  theme: 'default' | 'dark' | 'light'
-  target_weight_kg: number | null
+  theme?: 'default' | 'dark' | 'light'
+  target_weight_kg?: number | null
   // meta
   created_at: string
   updated_at: string

@@ -110,13 +110,13 @@ export async function GET(request: NextRequest) {
   // 3. Cache — store new, backfill stale
   if (external.length > 0) {
     const toStore = external.map(({ servings_json, ...f }: any) => f)
-    supabase.from('foods').insert(toStore).then(() => null).catch(() => null)
+    supabase.from('foods').insert(toStore).then(() => null, () => null)
     for (const food of toStore) {
       if (food.fs_food_id && food.name) {
         supabase.from('foods')
           .update({ fs_food_id: food.fs_food_id, serving_description: food.serving_description, serving_calories: food.serving_calories, serving_size_g: food.serving_size_g })
           .ilike('name', food.name).is('user_id', null).is('fs_food_id', null)
-          .then(() => null).catch(() => null)
+          .then(() => null, () => null)
       }
     }
   }

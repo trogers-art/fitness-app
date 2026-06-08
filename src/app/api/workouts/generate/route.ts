@@ -268,9 +268,9 @@ JSON:
         messages:   [{ role: 'user', content: prompt }],
       })
 
-      const text    = message.content.find((b: any) => b.type === 'text')?.text ?? ''
+      const text    = (message.content.find((b: any) => b.type === 'text') as any)?.text ?? ''
       const clean   = text.replace(/```json|```/g, '').trim()
-      const result  = JSON.parse(clean)
+      const result: any = JSON.parse(clean)
 
       // Match exercise names to IDs
       const nameToId: Record<string, string> = {}
@@ -294,7 +294,7 @@ JSON:
           sessionExs.map((ex: any) => ({ session_id: sess.id, ...ex }))
         )
       }
-    } catch (e) {
+    } catch (e: unknown) {
       console.error(`Session ${session.focus} error:`, e)
     }
   }

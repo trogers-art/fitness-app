@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json({ profile: data })
-  } catch (err) {
+  } catch (err: unknown) {
     console.error('Metrics route error:', err)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }

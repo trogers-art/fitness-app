@@ -144,11 +144,11 @@ Options must be varied — different foods from each other.
               model: 'claude-sonnet-4-20250514', max_tokens: 1200,
               messages: [{ role: 'user', content: prompt }],
             })
-            const text   = message.content.find((b: any) => b.type === 'text')?.text ?? ''
+            const text   = (message.content.find((b: any) => b.type === 'text') as any)?.text ?? ''
             const clean  = text.replace(/```json|```/g, '').trim()
-            const result = JSON.parse(clean)
+            const result: any = JSON.parse(clean)
             dayMeals[dow] = result.options || []
-          } catch (e) {
+          } catch (e: unknown) {
             console.error(`${mealDef.label} day ${dow} error:`, e)
               dayMeals[dow] = []
           }

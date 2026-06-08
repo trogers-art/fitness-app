@@ -72,18 +72,12 @@ function BarcodeScanner({ onDetected, loading, error, onManual, manualValue, onM
       const reader = new BrowserMultiFormatReader()
       readerRef.current = reader
 
-      const devices = await BrowserMultiFormatReader.listVideoInputDevices()
-      // Prefer back camera on mobile
-      const device = devices.find(d =>
-        d.label.toLowerCase().includes('back') ||
-        d.label.toLowerCase().includes('rear') ||
-        d.label.toLowerCase().includes('environment')
-      ) || devices[devices.length - 1] || devices[0]
-
-      if (!device) { setCamError('No camera found'); setScanning(false); return }
-
+      // Use environment-facing camera constraint directly
       setCamActive(true)
-      await reader.decodeFromVideoDevice(device.deviceId, videoRef.current!, (result, err) => {
+      await reader.decodeFromConstraints(
+        { video: { facingMode: { ideal: 'environment' } } },
+        videoRef.current!,
+        (result, err) => {
         if (result && !detectedRef.current) {
           detectedRef.current = true
           reader.reset()
@@ -265,7 +259,7 @@ export default function AddFood({ mealType, mealLabel, onClose, onAdded, loggedA
     // Use embedded servings_json if available
     if (food.servings_json) {
       try {
-        const svgs: ServingOption[] = JSON.parse(food.servings_json)
+        const svgs: ServingOption[] = JSON.parse(food.servings_json as string)
         if (svgs.length > 0) {
           setServings(svgs)
           const def = svgs.find(s => s.is_default) || svgs[0]

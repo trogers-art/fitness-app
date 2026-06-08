@@ -52,7 +52,7 @@ export async function GET(request: NextRequest) {
     // Try cached servings_json first
     if (food?.servings_json) {
       try {
-        const cached = JSON.parse(food.servings_json)
+        const cached: any[] = JSON.parse(food.servings_json)
         if (Array.isArray(cached) && cached.length > 0) {
           return NextResponse.json({ servings: cached })
         }
@@ -71,7 +71,7 @@ export async function GET(request: NextRequest) {
     supabase.from('foods')
       .update({ servings_json: JSON.stringify(servings) })
       .eq('id', foodIdParam)
-      .then(() => null).catch(() => null)
+      .then(() => null, () => null)
   }
 
   return NextResponse.json({ servings })

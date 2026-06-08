@@ -72,7 +72,7 @@ export default function OnboardingPage() {
     setLoading(true)
     setError(null)
 
-    let session = null
+    let session: any = null
     for (let i = 0; i < 3; i++) {
       const { data } = await supabase.auth.getSession()
       if (data.session) { session = data.session; break }

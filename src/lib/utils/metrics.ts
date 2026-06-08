@@ -90,8 +90,9 @@ export function computeMetrics(data: OnboardingFormData & { units?: string }): O
     fat_g: fatG,
     training_day_carbs_g: trainingDayCarbsG,
     rest_day_carbs_g: restDayCarbsG,
-    units: data.units || 'imperial',
-    target_weight_kg: data.target_weight_kg ?? null,
+    units: (data.units || 'imperial') as 'imperial' | 'metric',
+    theme: 'default' as 'default' | 'dark' | 'light',
+    target_weight_kg: (data as any).target_weight_kg ?? null,
   }
 }
 

@@ -43,7 +43,7 @@ export async function fatSecretPOST(methodName: string, extra: Record<string, st
       return null
     }
     return data
-  } catch (e) {
+  } catch (e: unknown) {
     console.error(`[FS] ${methodName} request failed:`, e)
     return null
   }

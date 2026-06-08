@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
     }
 
     let lastError: Error | null = null
-    let parsed = null
+    let parsed: any = null
 
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
       const correctionNote = attempt > 0
@@ -75,7 +75,7 @@ export async function POST(request: NextRequest) {
       const cleanText = text.replace(/```json|```/g, '').trim()
 
       try {
-        const json = JSON.parse(cleanText)
+        const json: any = JSON.parse(cleanText)
         const result = MealPlanResponseSchema.safeParse(json)
 
         if (result.success) {
@@ -91,7 +91,7 @@ export async function POST(request: NextRequest) {
         } else {
           lastError = new Error(JSON.stringify(result.error.flatten()))
         }
-      } catch (e) {
+      } catch (e: unknown) {
         lastError = new Error(`JSON parse failed: ${e}`)
       }
     }
@@ -131,7 +131,7 @@ export async function POST(request: NextRequest) {
     })
 
     return NextResponse.json({ meal_plan: mealPlan })
-  } catch (err) {
+  } catch (err: unknown) {
     console.error('Food plan route error:', err)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }

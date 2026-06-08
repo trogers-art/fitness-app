@@ -351,7 +351,7 @@ export default function MealPlan() {
       for (const line of lines) {
         if (!line.startsWith('data: ')) continue
         try {
-          const event = JSON.parse(line.slice(6))
+          const event: any = JSON.parse(line.slice(6))
 
           if (event.type === 'progress') {
             setGenProgress(prev => [...prev, { type: event.meal_type, label: event.label, done: false }])
@@ -516,7 +516,7 @@ export default function MealPlan() {
       {logTarget && (
         <LogMealModal meal={logTarget.meal} option={logTarget.option}
           onClose={() => setLogTarget(null)}
-          onLogged={() => { setLoggedKeys(p => new Set([...p, `${selectedDay}-${logTarget.meal.meal_type}-${logTarget.option.option_key}`])); setLogTarget(null) }}
+          onLogged={() => { setLoggedKeys(p => { const s = new Set(Array.from(p)); s.add(`${selectedDay}-${logTarget.meal.meal_type}-${logTarget.option.option_key}`); return s }); setLogTarget(null) }}
         />
       )}
 

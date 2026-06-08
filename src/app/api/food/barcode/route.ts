@@ -67,7 +67,7 @@ export async function GET(request: NextRequest) {
   }
 
   // Cache in DB
-  supabase.from('foods').upsert(food, { onConflict: 'barcode' }).then(() => null).catch(() => null)
+  supabase.from('foods').upsert(food, { onConflict: 'barcode' }).then(() => null, () => null)
 
   return NextResponse.json({ food })
 }

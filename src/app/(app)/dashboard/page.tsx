@@ -61,9 +61,9 @@ export default async function DashboardPage() {
     <DashboardClient
       profile={profileRes.data as any}
       emailConfirmed={!!user.email_confirmed_at}
-      todayNutrition={nutritionRes.data}
-      recentWeights={weightsRes.data || []}
-      latestCheckin={checkinRes.data?.[0] ?? null}
+      todayNutrition={nutritionRes.data as any}
+      recentWeights={(weightsRes.data || []) as any}
+      latestCheckin={(checkinRes.data?.[0] ?? null) as any}
       activeProgram={activeProgram ? { id: activeProgram.id, name: activeProgram.name } : null}
       todaySession={todaySession}
     />

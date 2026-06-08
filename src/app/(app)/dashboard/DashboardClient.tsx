@@ -60,7 +60,7 @@ export default function DashboardClient({ profile, emailConfirmed, todayNutritio
     </div>
   )
 
-  const imperial = profile.units === 'imperial'
+  const imperial = (profile.units ?? 'metric') === 'imperial'
   const n = todayNutrition || { total_calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0, workout_calories_burned: 0 }
   const net = n.total_calories - n.workout_calories_burned
   const remaining = (profile.daily_calories ?? 0) - net
