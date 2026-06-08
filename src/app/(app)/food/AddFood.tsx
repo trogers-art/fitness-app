@@ -80,9 +80,8 @@ function BarcodeScanner({ onDetected, loading, error, onManual, manualValue, onM
             facingMode: { ideal: 'environment' },
             width:      { ideal: 1280 },
             height:     { ideal: 720 },
-            focusMode:  { ideal: 'continuous' } as any,
-            advanced:   [{ focusMode: 'continuous' }] as any,
-          }
+            advanced:   [{ focusMode: 'continuous' }],
+          } as MediaTrackConstraints,
         },
         videoRef.current!,
         (result, err) => {
