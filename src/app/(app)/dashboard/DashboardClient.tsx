@@ -63,7 +63,7 @@ export default function DashboardClient({ profile, emailConfirmed, todayNutritio
   const imperial = profile.units === 'imperial'
   const n = todayNutrition || { total_calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0, workout_calories_burned: 0 }
   const net = n.total_calories - n.workout_calories_burned
-  const remaining = profile.daily_calories - net
+  const remaining = (profile.daily_calories ?? 0) - net  
   const over = remaining < 0
 
   const rollingKg = computeRollingAverage(recentWeights.map(w => ({ date: w.logged_at, weight_kg: w.weight_kg })))
