@@ -277,12 +277,14 @@ export default function AddFood({ mealType, mealLabel, onClose, onAdded, loggedA
                   value={query} onChange={e => setQuery(e.target.value)} autoFocus />
               </div>
 
-              {/* Autocomplete suggestions */}
+              {searching && <p style={{ fontSize: 11, color: 'var(--text-3)', textAlign: 'center', padding: '8px 0' }}>Searching...</p>}
+
+              {/* Autocomplete suggestions — only shown while waiting for results */}
               {suggestions.length > 0 && query.length >= 2 && results.length === 0 && !searching && (
-                <div style={{ border: '1px solid var(--border)', marginTop: -4 }}>
+                <div style={{ border: '1px solid var(--border)' }}>
                   {suggestions.map((s, i) => (
                     <button key={i} onClick={() => setQuery(s)}
-                      style={{ width: '100%', textAlign: 'left', padding: '8px 12px', background: 'none', border: 'none', borderBottom: i < suggestions.length-1 ? '1px solid var(--border)' : 'none', cursor: 'pointer', fontSize: 12, color: 'var(--text-2)', fontFamily: 'DM Sans, sans-serif' }}
+                      style={{ width: '100%', textAlign: 'left', padding: '9px 12px', background: 'none', border: 'none', borderBottom: i < suggestions.length-1 ? '1px solid var(--border)' : 'none', cursor: 'pointer', fontSize: 12, color: 'var(--text-2)', fontFamily: 'DM Sans, sans-serif' }}
                       onMouseEnter={e => (e.currentTarget.style.background = 'var(--surface-2)')}
                       onMouseLeave={e => (e.currentTarget.style.background = 'none')}>
                       {s}
@@ -290,8 +292,6 @@ export default function AddFood({ mealType, mealLabel, onClose, onAdded, loggedA
                   ))}
                 </div>
               )}
-
-              {searching && <p style={{ fontSize: 11, color: 'var(--text-3)', textAlign: 'center', padding: '8px 0' }}>Searching...</p>}
 
               {results.length > 0 && (
                 <div style={{ border: '1px solid var(--border)' }}>
