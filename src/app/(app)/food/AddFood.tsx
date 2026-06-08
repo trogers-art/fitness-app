@@ -72,10 +72,18 @@ function BarcodeScanner({ onDetected, loading, error, onManual, manualValue, onM
       const reader = new BrowserMultiFormatReader()
       readerRef.current = reader
 
-      // Use environment-facing camera constraint directly
+      // Request continuous autofocus + high resolution for reliable barcode detection
       setCamActive(true)
       await reader.decodeFromConstraints(
-        { video: { facingMode: { ideal: 'environment' } } },
+        {
+          video: {
+            facingMode: { ideal: 'environment' },
+            width:      { ideal: 1280 },
+            height:     { ideal: 720 },
+            focusMode:  { ideal: 'continuous' } as any,
+            advanced:   [{ focusMode: 'continuous' }] as any,
+          }
+        },
         videoRef.current!,
         (result, err) => {
         if (result && !detectedRef.current) {
