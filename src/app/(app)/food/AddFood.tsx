@@ -53,6 +53,7 @@ export default function AddFood({ mealType, mealLabel, onClose, onAdded, loggedA
   const [servings,      setServings]      = useState<ServingOption[]>([])
   const [serving,       setServing]       = useState<ServingOption | null>(null)
   const [customQty,     setCustomQty]     = useState('')
+  const [servingQty,    setServingQty]    = useState('1')
   const [loadingServs,  setLoadingServs]  = useState(false)
   const [saving,        setSaving]        = useState(false)
   const [barcodeInput,  setBarcodeInput]  = useState('')
@@ -101,6 +102,7 @@ export default function AddFood({ mealType, mealLabel, onClose, onAdded, loggedA
           setServings(svgs)
           const def = svgs.find(s => s.is_default) || svgs[0]
           setServing(def || null)
+          setServingQty('1')
           return
         }
       } catch { /* fall through */ }
@@ -149,8 +151,14 @@ export default function AddFood({ mealType, mealLabel, onClose, onAdded, loggedA
     fat:      Math.round(selected.fat_per_100g      * qtyNum / 100 * 10) / 10,
   } : null
 
+  const sqty = Math.max(0, parseFloat(servingQty) || 1)
   const activeNutrition = serving
-    ? { calories: serving.calories, protein: serving.protein, carbs: serving.carbs, fat: serving.fat }
+    ? {
+        calories: Math.round(serving.calories * sqty),
+        protein:  Math.round(serving.protein  * sqty * 10) / 10,
+        carbs:    Math.round(serving.carbs    * sqty * 10) / 10,
+        fat:      Math.round(serving.fat      * sqty * 10) / 10,
+      }
     : customPreview
 
   async function handleAdd() {
@@ -177,8 +185,16 @@ export default function AddFood({ mealType, mealLabel, onClose, onAdded, loggedA
 
     if (!selected) { setSaving(false); return }
 
+    const sq = Math.max(0, parseFloat(servingQty) || 1)
     const nutrition = serving
-      ? { serving_description: serving.description, calories_total: serving.calories, protein_total: serving.protein, carbs_total: serving.carbs, fat_total: serving.fat, quantity_g: serving.metric_g }
+      ? {
+          serving_description: sq === 1 ? serving.description : `${sq} × ${serving.description}`,
+          calories_total: Math.round(serving.calories * sq),
+          protein_total:  Math.round(serving.protein  * sq * 10) / 10,
+          carbs_total:    Math.round(serving.carbs    * sq * 10) / 10,
+          fat_total:      Math.round(serving.fat      * sq * 10) / 10,
+          quantity_g:     Math.round(serving.metric_g * sq),
+        }
       : { serving_description: `${qtyNum}g`, calories_total: customPreview?.calories, protein_total: customPreview?.protein, carbs_total: customPreview?.carbs, fat_total: customPreview?.fat, quantity_g: qtyNum }
 
     await fetch('/api/food/entries', {
@@ -200,7 +216,7 @@ export default function AddFood({ mealType, mealLabel, onClose, onAdded, loggedA
   }
 
   const canAdd = view === 'detail'
-    ? !!selected && (!!serving || qtyNum > 0)
+    ? !!selected && (!!serving && sqty > 0 || qtyNum > 0)
     : view === 'manual'
     ? !!manual.name && !!manual.calories && parseFloat(manual.qty) > 0
     : false
@@ -351,7 +367,7 @@ export default function AddFood({ mealType, mealLabel, onClose, onAdded, loggedA
                 <div>
                   <label style={S.lbl}>Choose serving</label>
                   {servings.map(s => (
-                    <button key={s.serving_id} onClick={() => { setServing(s); setCustomQty('') }}
+                    <button key={s.serving_id} onClick={() => { setServing(s); setCustomQty(''); setServingQty('1') }}
                       style={S.svgBtn(serving?.serving_id === s.serving_id)}>
                       <span>{s.description}</span>
                       <span style={{ fontSize: 11, fontFamily: 'DM Mono, monospace', flexShrink: 0, opacity: 0.8 }}>
@@ -359,9 +375,24 @@ export default function AddFood({ mealType, mealLabel, onClose, onAdded, loggedA
                       </span>
                     </button>
                   ))}
-                  <button onClick={() => { setServing(null); setCustomQty('100') }} style={S.svgBtn(!serving)}>
+                  <button onClick={() => { setServing(null); setCustomQty('100'); setServingQty('1') }} style={S.svgBtn(!serving)}>
                     <span>Custom amount (g)</span>
                   </button>
+                </div>
+              )}
+
+              {/* Quantity multiplier — how many of this serving */}
+              {serving && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ flex: 1 }}>
+                    <label style={S.lbl}>Quantity</label>
+                    <input style={S.input} type="number" min={0.25} max={20} step={0.25}
+                      value={servingQty} onChange={e => setServingQty(e.target.value)}
+                      placeholder="1" />
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 14 }}>
+                    × {serving.description}
+                  </div>
                 </div>
               )}
 
