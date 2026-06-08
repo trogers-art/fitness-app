@@ -74,15 +74,14 @@ function BarcodeScanner({ onDetected, loading, error, onManual, manualValue, onM
 
       // Request continuous autofocus + high resolution for reliable barcode detection
       setCamActive(true)
+      const videoConstraints = {
+          facingMode: { ideal: 'environment' },
+          width:      { ideal: 1280 },
+          height:     { ideal: 720 },
+          advanced:   [{ focusMode: 'continuous' }],
+        } as unknown as MediaTrackConstraints
       await reader.decodeFromConstraints(
-        {
-          video: {
-            facingMode: { ideal: 'environment' },
-            width:      { ideal: 1280 },
-            height:     { ideal: 720 },
-            advanced:   [{ focusMode: 'continuous' }],
-          } as MediaTrackConstraints,
-        },
+        { video: videoConstraints },
         videoRef.current!,
         (result, err) => {
         if (result && !detectedRef.current) {
