@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { BrowserMultiFormatReader } from '@zxing/library'
 
 type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack' | 'pre_workout' | 'post_workout'
 
@@ -42,6 +43,173 @@ interface Props {
 }
 
 type View = 'search' | 'detail' | 'manual' | 'barcode'
+
+// ── Barcode Scanner ────────────────────────────────────────────────────────
+
+interface BarcodeScannerProps {
+  onDetected:     (code: string) => void
+  loading:        boolean
+  error:          string | null
+  onManual:       () => void
+  manualValue:    string
+  onManualChange: (v: string) => void
+}
+
+function BarcodeScanner({ onDetected, loading, error, onManual, manualValue, onManualChange }: BarcodeScannerProps) {
+  const videoRef    = useRef<HTMLVideoElement>(null)
+  const readerRef   = useRef<any>(null)
+  const [camError,  setCamError]  = useState<string | null>(null)
+  const [scanning,  setScanning]  = useState(false)
+  const [camActive, setCamActive] = useState(false)
+  const detectedRef = useRef(false)
+
+  const startCamera = useCallback(async () => {
+    setCamError(null)
+    setScanning(true)
+    detectedRef.current = false
+    try {
+      const { BrowserMultiFormatReader } = await import('@zxing/library')
+      const reader = new BrowserMultiFormatReader()
+      readerRef.current = reader
+
+      const devices = await BrowserMultiFormatReader.listVideoInputDevices()
+      // Prefer back camera on mobile
+      const device = devices.find(d =>
+        d.label.toLowerCase().includes('back') ||
+        d.label.toLowerCase().includes('rear') ||
+        d.label.toLowerCase().includes('environment')
+      ) || devices[devices.length - 1] || devices[0]
+
+      if (!device) { setCamError('No camera found'); setScanning(false); return }
+
+      setCamActive(true)
+      await reader.decodeFromVideoDevice(device.deviceId, videoRef.current!, (result, err) => {
+        if (result && !detectedRef.current) {
+          detectedRef.current = true
+          reader.reset()
+          setCamActive(false)
+          setScanning(false)
+          onDetected(result.getText())
+        }
+      })
+    } catch (e: any) {
+      const msg = e?.message || ''
+      if (msg.includes('Permission') || msg.includes('NotAllowed')) {
+        setCamError('Camera permission denied. Enter barcode manually below.')
+      } else {
+        setCamError('Camera unavailable. Enter barcode manually below.')
+      }
+      setScanning(false)
+      setCamActive(false)
+    }
+  }, [onDetected])
+
+  useEffect(() => {
+    startCamera()
+    return () => {
+      readerRef.current?.reset?.()
+    }
+  }, [startCamera])
+
+  const S_lbl: React.CSSProperties = { fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--text-3)', fontWeight: 500, display: 'block', marginBottom: 6 }
+  const S_input: React.CSSProperties = { width: '100%', padding: '10px 12px', background: 'var(--surface-2)', border: '1px solid var(--border-2)', color: 'var(--text)', fontSize: 13, fontFamily: 'DM Mono, monospace', outline: 'none' }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+
+      {/* Camera viewfinder */}
+      <div style={{ position: 'relative', background: '#000', overflow: 'hidden', aspectRatio: '4/3', maxHeight: 280 }}>
+        <video ref={videoRef} style={{ width: '100%', height: '100%', objectFit: 'cover', display: camActive ? 'block' : 'none' }} muted playsInline />
+
+        {/* Scanning overlay */}
+        {camActive && (
+          <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
+            <div style={{ width: '70%', aspectRatio: '3/1', border: '2px solid rgba(255,255,255,0.8)', position: 'relative' }}>
+              {/* Corner accents */}
+              {[['0,0','top left'],['100% 0','top right'],['0 100%','bottom left'],['100%','bottom right']].map((_,i) => (
+                <div key={i} style={{
+                  position: 'absolute',
+                  width: 16, height: 16,
+                  border: '2px solid white',
+                  ...[
+                    { top: -2, left: -2, borderRight: 'none', borderBottom: 'none' },
+                    { top: -2, right: -2, borderLeft: 'none', borderBottom: 'none' },
+                    { bottom: -2, left: -2, borderRight: 'none', borderTop: 'none' },
+                    { bottom: -2, right: -2, borderLeft: 'none', borderTop: 'none' },
+                  ][i]
+                }} />
+              ))}
+              {/* Scan line */}
+              <div style={{
+                position: 'absolute', left: 0, right: 0, height: 2,
+                background: 'rgba(255,80,80,0.9)',
+                animation: 'scanline 2s ease-in-out infinite',
+              }} />
+            </div>
+          </div>
+        )}
+
+        {/* Loading/error state */}
+        {!camActive && !camError && (
+          <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#111' }}>
+            <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)' }}>Starting camera...</p>
+          </div>
+        )}
+        {camError && (
+          <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#111', padding: 16 }}>
+            <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', textAlign: 'center' }}>{camError}</p>
+          </div>
+        )}
+
+        {loading && (
+          <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.7)' }}>
+            <p style={{ fontSize: 13, color: 'white', fontWeight: 500 }}>Looking up barcode...</p>
+          </div>
+        )}
+      </div>
+
+      <style>{`
+        @keyframes scanline {
+          0%   { top: 0% }
+          50%  { top: calc(100% - 2px) }
+          100% { top: 0% }
+        }
+      `}</style>
+
+      {/* Status */}
+      {camActive && !loading && (
+        <p style={{ fontSize: 12, color: 'var(--text-3)', textAlign: 'center', margin: 0 }}>
+          Point camera at a barcode — it will scan automatically
+        </p>
+      )}
+
+      {error && <p style={{ fontSize: 12, color: 'var(--red)', margin: 0 }}>{error}</p>}
+
+      {/* Retry button */}
+      {(camError || (!camActive && !loading)) && !error && (
+        <button onClick={startCamera}
+          style={{ padding: '9px', background: 'var(--surface-2)', color: 'var(--text-2)', border: '1px solid var(--border-2)', fontSize: 12, cursor: 'pointer', fontFamily: 'DM Sans, sans-serif' }}>
+          Retry camera
+        </button>
+      )}
+
+      {/* Manual fallback */}
+      <div>
+        <label style={S_lbl}>Or enter barcode manually</label>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <input style={S_input} type="text" inputMode="numeric" placeholder="e.g. 012345678901"
+            value={manualValue} onChange={e => onManualChange(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') onManual() }} />
+          <button onClick={onManual} disabled={loading || !manualValue.trim()}
+            style={{ padding: '10px 14px', background: 'var(--btn-bg)', color: 'var(--btn-fg)', border: 'none', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'DM Sans, sans-serif', opacity: (!manualValue.trim() || loading) ? 0.4 : 1, flexShrink: 0 }}>
+            Go
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 
 export default function AddFood({ mealType, mealLabel, onClose, onAdded, loggedAt }: Props) {
   const [view,          setView]          = useState<View>('search')
@@ -330,21 +498,23 @@ export default function AddFood({ mealType, mealLabel, onClose, onAdded, loggedA
 
           {/* ── Barcode ── */}
           {view === 'barcode' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <p style={{ fontSize: 12, color: 'var(--text-2)', margin: 0 }}>Enter a barcode number to look up a product.</p>
-              <div>
-                <label style={S.lbl}>Barcode number</label>
-                <input style={S.input} type="text" inputMode="numeric" placeholder="e.g. 012345678901"
-                  value={barcodeInput} onChange={e => setBarcodeInput(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter') handleBarcodeLookup() }}
-                  autoFocus />
-              </div>
-              {barcodeError && <p style={{ fontSize: 12, color: 'var(--red)', margin: 0 }}>{barcodeError}</p>}
-              <button onClick={handleBarcodeLookup} disabled={barcodeLoading || !barcodeInput.trim()}
-                style={{ padding: '11px', background: 'var(--btn-bg)', color: 'var(--btn-fg)', border: 'none', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'DM Sans, sans-serif', opacity: (barcodeLoading || !barcodeInput.trim()) ? 0.4 : 1 }}>
-                {barcodeLoading ? 'Looking up...' : 'Look up barcode'}
-              </button>
-            </div>
+            <BarcodeScanner
+              onDetected={async (code) => {
+                setBarcodeInput(code)
+                setBarcodeLoading(true)
+                setBarcodeError(null)
+                const res  = await fetch(`/api/food/barcode?barcode=${encodeURIComponent(code)}`, { credentials: 'include' })
+                const data = await res.json()
+                setBarcodeLoading(false)
+                if (!data.food) { setBarcodeError(`Barcode ${code} not found. Try searching manually.`); return }
+                selectFood(data.food)
+              }}
+              loading={barcodeLoading}
+              error={barcodeError}
+              onManual={handleBarcodeLookup}
+              manualValue={barcodeInput}
+              onManualChange={setBarcodeInput}
+            />
           )}
 
           {/* ── Detail ── */}
