@@ -66,8 +66,9 @@ export default function AppShell({ email, theme: initialTheme, children }: Props
       {/* ── Desktop sidebar ── */}
       <aside className="lg-sidebar" style={{
         width: 190, flexShrink: 0, display: 'none', flexDirection: 'column',
-        position: 'fixed', height: '100%',
+        position: 'fixed', height: '100%', top: 0, left: 0,
         background: 'var(--sidebar-bg)', borderRight: '1px solid var(--sidebar-border)',
+        zIndex: 50,
       }}>
         <div style={{ padding: '13px 18px', borderBottom: '1px solid var(--sidebar-border)' }}>
           <span style={{ fontSize: 9, letterSpacing: '0.28em', textTransform: 'uppercase', color: 'var(--sidebar-muted)', fontWeight: 600 }}>FitApp</span>
@@ -168,11 +169,15 @@ export default function AppShell({ email, theme: initialTheme, children }: Props
       </nav>
 
       <style>{`
+        .lg-sidebar    { display: none; }
+        .mobile-header { display: flex; }
+        .mobile-nav    { display: grid; }
+        .app-main      { margin-left: 0; }
         @media (min-width: 1024px) {
-          .lg-sidebar     { display: flex !important; }
-          .mobile-header  { display: none !important; }
-          .mobile-nav     { display: none !important; }
-          .app-main       { margin-left: 190px; padding-bottom: 48px !important; }
+          .lg-sidebar    { display: flex !important; }
+          .mobile-header { display: none !important; }
+          .mobile-nav    { display: none !important; }
+          .app-main      { margin-left: 190px !important; padding-bottom: 48px !important; }
         }
         @media (max-width: 1023px) {
           .app-main > div { padding: 16px 14px !important; }
