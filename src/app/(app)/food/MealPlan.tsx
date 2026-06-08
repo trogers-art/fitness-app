@@ -385,13 +385,68 @@ export default function MealPlan() {
     })
   }
 
+  const [genProgress, setGenProgress] = useState<string | null>(null)
+
   async function handleGenerate() {
-    setGenerating(true); setError(null)
-    const res  = await fetch('/api/food/meal-plan', { method: 'POST', credentials: 'include' })
-    const data = await res.json()
-    if (!res.ok) { setError(data.error || 'Generation failed'); setGenerating(false); return }
-    setPlan(data.plan)
+    setGenerating(true)
+    setError(null)
+    setGenProgress('Starting...')
+
+    // Reset plan to empty while generating
+    setPlan(null)
+
+    const res = await fetch('/api/food/meal-plan', { method: 'POST', credentials: 'include' })
+    if (!res.ok || !res.body) { setError('Generation failed'); setGenerating(false); return }
+
+    const reader  = res.body.getReader()
+    const decoder = new TextDecoder()
+    let planId: string | null  = null
+    let notes:  string         = ''
+    const days: any[]          = []
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+
+      const chunk = decoder.decode(value)
+      const lines = chunk.split('
+')
+
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue
+        try {
+          const event = JSON.parse(line.slice(6))
+
+          if (event.type === 'progress') {
+            setGenProgress(`Generating ${event.day_name}...`)
+          }
+          if (event.type === 'day') {
+            days.push(event.data)
+            // Show partial plan as days come in
+            setPlan(prev => ({
+              id:         planId || 'generating',
+              created_at: new Date().toISOString(),
+              plan_data:  { training_days: event.data.is_training ? [] : [], days: [...days], notes },
+            }))
+          }
+          if (event.type === 'error') {
+            console.error('Day gen error:', event.message)
+          }
+          if (event.type === 'done') {
+            planId = event.plan_id
+            notes  = event.notes
+            // Final plan with correct training_days
+            const finalRes = await fetch('/api/food/meal-plan', { credentials: 'include' })
+            const finalData = await finalRes.json()
+            if (finalData.plan) setPlan(finalData.plan)
+            setGenProgress(null)
+          }
+        } catch { /* skip malformed lines */ }
+      }
+    }
+
     setGenerating(false)
+    setGenProgress(null)
   }
 
   if (loading) return <p style={{ ...S.lbl, textAlign: 'center', padding: '40px 0' }}>Loading...</p>
@@ -407,7 +462,7 @@ export default function MealPlan() {
           style={{ padding: '11px 24px', background: 'var(--btn-bg)', color: 'var(--btn-fg)', border: 'none', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'DM Sans, sans-serif', opacity: generating ? 0.6 : 1 }}>
           {generating ? 'Generating...' : 'Generate 7-day meal plan'}
         </button>
-        {generating && <p style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 12 }}>Building your plan — this takes about 20 seconds...</p>}
+        {generating && <p style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 12 }}>{genProgress || 'Starting...'}</p>}
         {error && <p style={{ fontSize: 12, color: 'var(--red)', marginTop: 10 }}>{error}</p>}
       </div>
     </div>
@@ -431,7 +486,7 @@ export default function MealPlan() {
         </div>
         <button onClick={handleGenerate} disabled={generating}
           style={{ fontSize: 11, padding: '5px 12px', border: '1px solid var(--border-2)', background: 'none', color: 'var(--text-2)', cursor: 'pointer', fontFamily: 'DM Sans, sans-serif', opacity: generating ? 0.5 : 1, flexShrink: 0 }}>
-          {generating ? 'Generating...' : 'Regenerate'}
+          {generating ? (genProgress || 'Generating...') : 'Regenerate'}
         </button>
       </div>
 
