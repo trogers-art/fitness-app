@@ -61,7 +61,7 @@ export default function AppShell({ email, theme: initialTheme, children }: Props
   }
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', background: 'var(--bg)' }}>
+    <div style={{ minHeight: '100vh', display: 'block', background: 'var(--bg)' }}>
 
       {/* ── Desktop sidebar ── */}
       <aside className="lg-sidebar" style={{
@@ -138,8 +138,8 @@ export default function AppShell({ email, theme: initialTheme, children }: Props
       </header>
 
       {/* ── Main content ── */}
-      <main className="app-main" style={{ flex: 1, paddingBottom: 80, background: 'var(--bg)' }}>
-        <div style={{ maxWidth: 680, margin: '0 auto', padding: '24px 16px' }}>
+      <main className="app-main" style={{ flex: 1, paddingBottom: 80, background: 'var(--bg)', width: '100%', minWidth: 0 }}>
+        <div style={{ maxWidth: 680, margin: '0 auto', padding: '24px 16px', width: '100%' }}>
           {children}
         </div>
       </main>
