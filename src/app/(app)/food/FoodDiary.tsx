@@ -5,9 +5,10 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import AddFood from './AddFood'
 import Recipes from './Recipes'
+import MealPlan from './MealPlan'
 
 type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack' | 'pre_workout' | 'post_workout'
-type FoodTab  = 'diary' | 'recipes'
+type FoodTab  = 'diary' | 'recipes' | 'plan'
 
 interface Food {
   id: string; name: string; brand: string | null
@@ -280,7 +281,7 @@ export default function FoodDiary({ profile }: { profile: Profile | null }) {
 
       {/* Tab switcher */}
       <div style={{ display: 'flex', borderBottom: '1px solid var(--border)' }}>
-        {([['diary','Diary'],['recipes','Recipes']] as [FoodTab,string][]).map(([t,label]) => (
+        {([['diary','Diary'],['recipes','Recipes'],['plan','Meal Plan']] as [FoodTab,string][]).map(([t,label]) => (
           <button key={t} onClick={() => setTab(t)} style={{
             padding: '9px 16px', fontSize: 11, fontWeight: tab === t ? 600 : 400,
             background: 'none', border: 'none', cursor: 'pointer',
@@ -292,6 +293,8 @@ export default function FoodDiary({ profile }: { profile: Profile | null }) {
       </div>
 
       {tab === 'recipes' && <Recipes />}
+
+      {tab === 'plan' && <MealPlan />}
 
       {tab === 'diary' && (
         <>
