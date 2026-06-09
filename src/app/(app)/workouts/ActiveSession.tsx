@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { ExerciseDetailModal } from './page'
+import { ExerciseDetailModal } from './ExerciseDetailModal'
 
 interface SessionExercise {
   id: string
