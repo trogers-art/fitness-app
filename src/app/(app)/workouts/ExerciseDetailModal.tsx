@@ -17,11 +17,36 @@ export function ExerciseDetailModal({ exercise, sets, reps, rest, onClose }: Exe
   const [gifLoading, setGifLoading] = useState(true)
 
   useEffect(() => {
-    if (!exercise.gif_url) { setGifLoading(false); return }
-    const match = exercise.gif_url.match(/^edb:(.+)$/)
-    if (!match) { setGifLoading(false); return }
-    setGifSrc(`/api/exercises/gif-image?edb_id=${match[1]}`)
-  }, [exercise.gif_url])
+    async function resolveGif() {
+      // Already have edb_id cached in DB — use it directly
+      if (exercise.gif_url) {
+        const match = exercise.gif_url.match(/^edb:(.+)$/)
+        if (match) {
+          setGifSrc(`/api/exercises/gif-image?edb_id=${match[1]}`)
+          return
+        }
+      }
+
+      // gif_url is null — hit the lookup route, cache edb_id in DB, then load GIF
+      try {
+        const res = await fetch(
+          `/api/exercises/gif?exercise_id=${exercise.id}&name=${encodeURIComponent(exercise.name)}`,
+          { credentials: 'include' }
+        )
+        const data = await res.json()
+        if (data.edb_id) {
+          setGifSrc(`/api/exercises/gif-image?edb_id=${data.edb_id}`)
+          return
+        }
+      } catch {
+        // fall through to no-preview state
+      }
+
+      setGifLoading(false)
+    }
+
+    resolveGif()
+  }, [exercise.id, exercise.gif_url, exercise.name])
 
   return (
     <div
@@ -46,7 +71,7 @@ export function ExerciseDetailModal({ exercise, sets, reps, rest, onClose }: Exe
         <div style={{ overflowY: 'auto', flex: 1 }}>
           {/* GIF */}
           <div style={{ background: 'var(--surface-2)', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 200, position: 'relative' }}>
-            {gifLoading && gifSrc && (
+            {gifLoading && (
               <p style={{ ...S_lbl, position: 'absolute' }}>Loading...</p>
             )}
             {gifSrc ? (
@@ -57,11 +82,11 @@ export function ExerciseDetailModal({ exercise, sets, reps, rest, onClose }: Exe
                 onError={() => { setGifLoading(false); setGifSrc(null) }}
                 style={{ maxWidth: '100%', maxHeight: 280, display: gifLoading ? 'none' : 'block', objectFit: 'contain' }}
               />
-            ) : (
+            ) : !gifLoading ? (
               <div style={{ padding: 40, textAlign: 'center' }}>
                 <p style={{ ...S_lbl }}>No preview available</p>
               </div>
-            )}
+            ) : null}
           </div>
 
           {/* Sets / reps / rest */}
