@@ -52,6 +52,132 @@ const S = {
   }),
 }
 
+// ── Exercise Detail Modal ──────────────────────────────────────────────────
+
+interface ExerciseDetailProps {
+  exercise: { id: string; name: string; muscle_group: string; gif_url: string | null }
+  sets?: number
+  reps?: string
+  rest?: number
+  onClose: () => void
+}
+
+export function ExerciseDetailModal({ exercise, sets, reps, rest, onClose }: ExerciseDetailProps) {
+  const [gifSrc,     setGifSrc]     = useState<string | null>(null)
+  const [gifLoading, setGifLoading] = useState(true)
+
+  useEffect(() => {
+    if (!exercise.gif_url) { setGifLoading(false); return }
+    const match = exercise.gif_url.match(/^edb:(.+)$/)
+    if (!match) { setGifLoading(false); return }
+    setGifSrc(`/api/exercises/gif-image?edb_id=${match[1]}`)
+  }, [exercise.gif_url])
+
+  return (
+    <div
+      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)', zIndex: 400, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}
+      onClick={e => { if (e.target === e.currentTarget) onClose() }}
+    >
+      <div style={{ width: '100%', maxWidth: 420, background: 'var(--surface)', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', maxHeight: '88vh', overflow: 'hidden' }}>
+
+        {/* Header */}
+        <div style={{ padding: '13px 16px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexShrink: 0 }}>
+          <div>
+            <p style={{ fontSize: 15, fontWeight: 600, color: 'var(--text)', margin: '0 0 2px' }}>{exercise.name}</p>
+            <p style={{ fontSize: 10, color: 'var(--text-3)', margin: 0, textTransform: 'capitalize' }}>
+              {exercise.muscle_group.replace(/_/g, ' ')}
+            </p>
+          </div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-3)', padding: 4, flexShrink: 0 }}>
+            <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M1 1l11 11M12 1L1 12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="square"/></svg>
+          </button>
+        </div>
+
+        <div style={{ overflowY: 'auto', flex: 1 }}>
+          {/* GIF */}
+          <div style={{ background: 'var(--surface-2)', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 200, position: 'relative' }}>
+            {gifLoading && gifSrc && (
+              <p style={{ ...S.lbl, position: 'absolute' }}>Loading...</p>
+            )}
+            {gifSrc ? (
+              <img
+                src={gifSrc}
+                alt={exercise.name}
+                onLoad={() => setGifLoading(false)}
+                onError={() => { setGifLoading(false); setGifSrc(null) }}
+                style={{ maxWidth: '100%', maxHeight: 280, display: gifLoading ? 'none' : 'block', objectFit: 'contain' }}
+              />
+            ) : (
+              <div style={{ padding: 40, textAlign: 'center' }}>
+                <p style={{ ...S.lbl }}>No preview available</p>
+              </div>
+            )}
+          </div>
+
+          {/* Sets / reps / rest */}
+          {(sets || reps || rest) && (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', borderBottom: '1px solid var(--border)' }}>
+              {sets && (
+                <div style={{ padding: '12px 16px', borderRight: '1px solid var(--border)' }}>
+                  <p style={{ ...S.lbl, marginBottom: 4 }}>Sets</p>
+                  <p style={{ fontSize: 18, fontFamily: 'DM Mono, monospace', fontWeight: 600, color: 'var(--text)', margin: 0 }}>{sets}</p>
+                </div>
+              )}
+              {reps && (
+                <div style={{ padding: '12px 16px', borderRight: '1px solid var(--border)' }}>
+                  <p style={{ ...S.lbl, marginBottom: 4 }}>Reps</p>
+                  <p style={{ fontSize: 18, fontFamily: 'DM Mono, monospace', fontWeight: 600, color: 'var(--text)', margin: 0 }}>{reps}</p>
+                </div>
+              )}
+              {rest && (
+                <div style={{ padding: '12px 16px' }}>
+                  <p style={{ ...S.lbl, marginBottom: 4 }}>Rest</p>
+                  <p style={{ fontSize: 18, fontFamily: 'DM Mono, monospace', fontWeight: 600, color: 'var(--text)', margin: 0 }}>{rest}s</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Instructions */}
+          <div style={{ padding: '14px 16px' }}>
+            <p style={{ ...S.lbl, marginBottom: 10 }}>How to perform</p>
+            <ExerciseInstructions exerciseId={exercise.id} name={exercise.name} />
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function ExerciseInstructions({ exerciseId, name }: { exerciseId: string; name: string }) {
+  const [instructions, setInstructions] = useState<string[] | null>(null)
+  const [loading,      setLoading]      = useState(true)
+
+  useEffect(() => {
+    fetch(`/api/exercises?q=${encodeURIComponent(name)}&limit=1`, { credentials: 'include' })
+      .then(r => r.json())
+      .then(data => {
+        const ex = data.exercise || data.exercises?.[0]
+        setInstructions(ex?.instructions || null)
+      })
+      .catch(() => setInstructions(null))
+      .finally(() => setLoading(false))
+  }, [exerciseId])
+
+  if (loading) return <p style={{ fontSize: 12, color: 'var(--text-3)', margin: 0 }}>Loading...</p>
+  if (!instructions || instructions.length === 0) {
+    return <p style={{ fontSize: 12, color: 'var(--text-3)', margin: 0 }}>No instructions available for {name}.</p>
+  }
+
+  return (
+    <ol style={{ margin: 0, paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 8 }}>
+      {instructions.map((step, i) => (
+        <li key={i} style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.6 }}>{step}</li>
+      ))}
+    </ol>
+  )
+}
+
 // ── Exercise Picker ────────────────────────────────────────────────────────
 
 function ExercisePicker({ onAdd, onClose }: { onAdd: (ex: Exercise) => void; onClose: () => void }) {
@@ -100,7 +226,7 @@ function ExercisePicker({ onAdd, onClose }: { onAdd: (ex: Exercise) => void; onC
               onMouseLeave={e => (e.currentTarget.style.background = 'none')}>
               <p style={{ fontSize: 13, color: 'var(--text)', margin: 0, fontWeight: 500 }}>{ex.name}</p>
               <p style={{ fontSize: 10, color: 'var(--text-3)', margin: '2px 0 0', textTransform: 'capitalize' }}>
-                {ex.muscle_group.replace('_',' ')} · {ex.equipment?.slice(0,2).join(', ')}
+                {ex.muscle_group.replace('_',' ')} · {Array.isArray(ex.equipment) ? ex.equipment.slice(0,2).join(', ') : ex.equipment}
               </p>
             </button>
           ))}
@@ -151,7 +277,6 @@ function AIGenerator({ onGenerated, onCancel }: { onGenerated: (id: string, name
       <div style={S.card}>
         <p style={{ ...S.lbl, marginBottom: 14 }}>Parameters</p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
             <div>
               <p style={{ ...S.lbl, marginBottom: 6 }}>Days per week</p>
@@ -162,7 +287,6 @@ function AIGenerator({ onGenerated, onCancel }: { onGenerated: (id: string, name
               <input style={S.input} type="number" min={1} max={16} value={weeks} onChange={e => setWeeks(parseInt(e.target.value) || 8)} />
             </div>
           </div>
-
           <div>
             <p style={{ ...S.lbl, marginBottom: 8 }}>Experience level</p>
             <div style={{ display: 'flex', gap: 6 }}>
@@ -171,7 +295,6 @@ function AIGenerator({ onGenerated, onCancel }: { onGenerated: (id: string, name
               ))}
             </div>
           </div>
-
           <div>
             <p style={{ ...S.lbl, marginBottom: 8 }}>Available equipment</p>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
@@ -182,7 +305,6 @@ function AIGenerator({ onGenerated, onCancel }: { onGenerated: (id: string, name
               ))}
             </div>
           </div>
-
           <div>
             <p style={{ ...S.lbl, marginBottom: 6 }}>Injuries or limitations <span style={{ color: 'var(--text-3)' }}>(optional)</span></p>
             <input style={S.input} type="text" value={injuries} onChange={e => setInjuries(e.target.value)} placeholder="e.g. lower back, left knee" />
@@ -378,7 +500,8 @@ function ProgramDetail({ program, onBack, onDeleted, onStartSession, onRefresh }
   onStartSession: (session: Session, programId: string, programName: string) => void
 }) {
   const [deleting, setDeleting] = useState(false)
-  const week1 = program.program_weeks?.[0]?.sessions ?? []
+  const [detailEx, setDetailEx] = useState<SessionExercise | null>(null)
+  const week1  = program.program_weeks?.[0]?.sessions ?? []
   const sorted = [...week1].sort((a,b) => a.day_of_week - b.day_of_week)
 
   async function handleDelete() {
@@ -404,18 +527,14 @@ function ProgramDetail({ program, onBack, onDeleted, onStartSession, onRefresh }
           </p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          {/* Active toggle */}
           <button
             onClick={async () => {
               const newActive = !program.active
               await fetch(`/api/workouts/programs/${program.id}`, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'include',
+                method: 'PATCH', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
                 body: JSON.stringify({ active: newActive }),
               })
-              onBack()
-              onRefresh()
+              onBack(); onRefresh()
             }}
             style={{
               fontSize: 10, padding: '4px 10px', border: '1px solid',
@@ -448,7 +567,13 @@ function ProgramDetail({ program, onBack, onDeleted, onStartSession, onRefresh }
             </button>
           </div>
           {[...session.session_exercises].sort((a,b) => a.order_index - b.order_index).map(se => (
-            <div key={se.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '9px 16px', borderBottom: '1px solid var(--border)' }}>
+            <button
+              key={se.id}
+              onClick={() => setDetailEx(se)}
+              style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '9px 16px', background: 'none', border: 'none', borderBottom: '1px solid var(--border)', cursor: 'pointer', fontFamily: 'DM Sans, sans-serif', textAlign: 'left' as const }}
+              onMouseEnter={e => (e.currentTarget.style.background = 'var(--surface-2)')}
+              onMouseLeave={e => (e.currentTarget.style.background = 'none')}
+            >
               <div>
                 <p style={{ fontSize: 13, color: 'var(--text)', margin: 0 }}>{se.exercise.name}</p>
                 <p style={{ fontSize: 10, color: 'var(--text-3)', margin: '2px 0 0', textTransform: 'capitalize' }}>{se.exercise.muscle_group.replace('_',' ')}</p>
@@ -456,10 +581,20 @@ function ProgramDetail({ program, onBack, onDeleted, onStartSession, onRefresh }
               <p style={{ fontSize: 11, fontFamily: 'DM Mono, monospace', color: 'var(--text-2)', margin: 0, flexShrink: 0 }}>
                 {se.target_sets} × {se.target_reps}
               </p>
-            </div>
+            </button>
           ))}
         </div>
       ))}
+
+      {detailEx && (
+        <ExerciseDetailModal
+          exercise={detailEx.exercise}
+          sets={detailEx.target_sets}
+          reps={detailEx.target_reps}
+          rest={detailEx.rest_seconds}
+          onClose={() => setDetailEx(null)}
+        />
+      )}
     </div>
   )
 }
@@ -470,7 +605,6 @@ function History({ logs }: { logs: WorkoutLog[] }) {
   if (logs.length === 0) return (
     <p style={{ ...S.lbl, textAlign: 'center', padding: '32px 0' }}>No sessions logged yet.</p>
   )
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       {logs.map(log => {
@@ -522,7 +656,7 @@ export default function WorkoutsPage() {
     setLoading(true)
     const [progRes, logRes] = await Promise.all([
       fetch('/api/workouts/programs', { credentials: 'include' }),
-      fetch('/api/workouts/logs', { credentials: 'include' }),
+      fetch('/api/workouts/logs',     { credentials: 'include' }),
     ])
     const [progData, logData] = await Promise.all([progRes.json(), logRes.json()])
     setPrograms(progData.programs || [])
@@ -533,27 +667,18 @@ export default function WorkoutsPage() {
   const searchParams = useSearchParams()
 
   useEffect(() => {
-    loadPrograms().then(() => {
-      const startProgramId = searchParams.get('start')
-      const startSessionId = searchParams.get('session')
-      if (startProgramId && startSessionId) {
-        // Will be handled after programs load — see below
-      }
-    })
-  }, [loadPrograms, searchParams])
+    loadPrograms()
+  }, [loadPrograms])
 
-  // Auto-launch session when navigated from dashboard
   useEffect(() => {
     const startProgramId = searchParams.get('start')
     const startSessionId = searchParams.get('session')
     if (!startProgramId || !startSessionId || programs.length === 0) return
-
     const program = programs.find(p => p.id === startProgramId)
     if (!program) return
     const allSessions = program.program_weeks?.flatMap(w => w.sessions) ?? []
     const session = allSessions.find(s => s.id === startSessionId)
     if (!session) return
-
     setSelected(program)
     handleStartSession(session, program.id, `${program.name} — ${session.focus}`)
   }, [programs, searchParams])
@@ -605,7 +730,6 @@ export default function WorkoutsPage() {
     />
   )
 
-  // List view
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between' }}>
@@ -623,7 +747,6 @@ export default function WorkoutsPage() {
         </div>
       </div>
 
-      {/* Generated notes banner */}
       {generatedNotes && (
         <div style={{ padding: '12px 14px', borderLeft: '2px solid var(--green)', fontSize: 12, color: 'var(--text-2)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
           <div>
@@ -637,7 +760,6 @@ export default function WorkoutsPage() {
         </div>
       )}
 
-      {/* Tabs */}
       <div style={{ display: 'flex', borderBottom: '1px solid var(--border)' }}>
         {(['programs','history'] as MainTab[]).map(t => (
           <button key={t} onClick={() => setTab(t)} style={{
@@ -651,9 +773,7 @@ export default function WorkoutsPage() {
       </div>
 
       {loading && <p style={{ ...S.lbl, textAlign: 'center', padding: '32px 0' }}>Loading...</p>}
-
       {!loading && tab === 'history' && <History logs={logs} />}
-
       {!loading && tab === 'programs' && (
         <>
           {programs.length === 0 && (
@@ -665,7 +785,6 @@ export default function WorkoutsPage() {
               </div>
             </div>
           )}
-
           {programs.map(program => {
             const sessions = program.program_weeks?.[0]?.sessions ?? []
             const totalEx  = sessions.reduce((s, sess) => s + sess.session_exercises.length, 0)

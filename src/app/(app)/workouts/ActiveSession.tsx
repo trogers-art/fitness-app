@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { ExerciseDetailModal } from './page'
 
 interface SessionExercise {
   id: string
@@ -21,12 +22,12 @@ interface LoggedSet {
 }
 
 interface Props {
-  programId:  string
-  sessionId:  string
+  programId:   string
+  sessionId:   string
   sessionName: string
-  exercises:  SessionExercise[]
-  onFinished: () => void
-  onCancel:   () => void
+  exercises:   SessionExercise[]
+  onFinished:  () => void
+  onCancel:    () => void
 }
 
 const S = {
@@ -86,7 +87,6 @@ function RestTimer({ seconds, onDone }: { seconds: number; onDone: () => void })
 export default function ActiveSession({ programId, sessionId, sessionName, exercises, onFinished, onCancel }: Props) {
   const sorted = [...exercises].sort((a,b) => a.order_index - b.order_index)
 
-  // Track logged sets per exercise: Map<exercise_id, LoggedSet[]>
   const [loggedSets,   setLoggedSets]   = useState<Map<string, LoggedSet[]>>(() => {
     const m = new Map<string, LoggedSet[]>()
     for (const ex of sorted) m.set(ex.exercise.id, [])
@@ -95,11 +95,11 @@ export default function ActiveSession({ programId, sessionId, sessionName, exerc
   const [currentExIdx, setCurrentExIdx] = useState(0)
   const [showTimer,    setShowTimer]    = useState(false)
   const [saving,       setSaving]       = useState(false)
+  const [detailEx,     setDetailEx]     = useState<SessionExercise | null>(null)
   const startedAt = useRef(new Date().toISOString())
 
   const currentEx = sorted[currentExIdx]
 
-  // Weight/reps input state per exercise
   const [inputs, setInputs] = useState<Record<string, { weight: string; reps: string }>>(() => {
     const m: Record<string, { weight: string; reps: string }> = {}
     for (const ex of sorted) m[ex.exercise.id] = { weight: '', reps: ex.target_reps.split('-')[0] || '10' }
@@ -110,7 +110,7 @@ export default function ActiveSession({ programId, sessionId, sessionName, exerc
   function completedSets(exId: string) { return getSets(exId).filter(s => s.completed).length }
 
   function logSet(ex: SessionExercise) {
-    const inp = inputs[ex.exercise.id]
+    const inp  = inputs[ex.exercise.id]
     const sets = getSets(ex.exercise.id)
     const newSet: LoggedSet = {
       exercise_id:   ex.exercise.id,
@@ -125,7 +125,6 @@ export default function ActiveSession({ programId, sessionId, sessionName, exerc
       next.set(ex.exercise.id, [...(prev.get(ex.exercise.id) || []), newSet])
       return next
     })
-    // Show rest timer if not last set
     const isLastSet = sets.length + 1 >= ex.target_sets
     const isLastEx  = currentExIdx >= sorted.length - 1
     if (!isLastSet || !isLastEx) setShowTimer(true)
@@ -141,13 +140,13 @@ export default function ActiveSession({ programId, sessionId, sessionName, exerc
     })
   }
 
-  const allSets = Array.from(loggedSets.values()).flat()
+  const allSets         = Array.from(loggedSets.values()).flat()
   const totalSetsLogged = allSets.filter(s => s.completed).length
 
   async function handleFinish() {
     setSaving(true)
     const finishedAt = new Date().toISOString()
-    const duration = Math.round((new Date(finishedAt).getTime() - new Date(startedAt.current).getTime()) / 1000)
+    const duration   = Math.round((new Date(finishedAt).getTime() - new Date(startedAt.current).getTime()) / 1000)
 
     await fetch('/api/workouts/logs', {
       method: 'POST',
@@ -186,8 +185,8 @@ export default function ActiveSession({ programId, sessionId, sessionName, exerc
       {/* Exercise tabs */}
       <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 4 }}>
         {sorted.map((ex, i) => {
-          const done = completedSets(ex.exercise.id)
-          const total = ex.target_sets
+          const done    = completedSets(ex.exercise.id)
+          const total   = ex.target_sets
           const isActive = i === currentExIdx
           return (
             <button key={ex.id} onClick={() => setCurrentExIdx(i)}
@@ -195,7 +194,7 @@ export default function ActiveSession({ programId, sessionId, sessionName, exerc
                 padding: '5px 10px', fontSize: 11, fontWeight: 500, flexShrink: 0,
                 border: '1px solid',
                 borderColor: isActive ? 'var(--text)' : done >= total ? 'var(--green)' : 'var(--border-2)',
-                background: isActive ? 'var(--btn-bg)' : done >= total ? 'transparent' : 'transparent',
+                background: isActive ? 'var(--btn-bg)' : 'transparent',
                 color: isActive ? 'var(--btn-fg)' : done >= total ? 'var(--green)' : 'var(--text-2)',
                 cursor: 'pointer', fontFamily: 'DM Sans, sans-serif', whiteSpace: 'nowrap',
               }}>
@@ -208,11 +207,27 @@ export default function ActiveSession({ programId, sessionId, sessionName, exerc
       {/* Current exercise */}
       {currentEx && (
         <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', overflow: 'hidden' }}>
-          <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--border)' }}>
-            <p style={{ fontSize: 15, fontWeight: 600, color: 'var(--text)', margin: '0 0 2px' }}>{currentEx.exercise.name}</p>
-            <p style={{ fontSize: 10, color: 'var(--text-3)', margin: 0, textTransform: 'capitalize' }}>
-              {currentEx.exercise.muscle_group.replace('_',' ')} · Target: {currentEx.target_sets} × {currentEx.target_reps}
-            </p>
+          <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+            <div>
+              <p style={{ fontSize: 15, fontWeight: 600, color: 'var(--text)', margin: '0 0 2px' }}>{currentEx.exercise.name}</p>
+              <p style={{ fontSize: 10, color: 'var(--text-3)', margin: 0, textTransform: 'capitalize' }}>
+                {currentEx.exercise.muscle_group.replace('_',' ')} · Target: {currentEx.target_sets} × {currentEx.target_reps}
+              </p>
+            </div>
+            {/* Info button — opens exercise detail modal */}
+            <button
+              onClick={() => setDetailEx(currentEx)}
+              title="How to perform"
+              style={{ background: 'none', border: '1px solid var(--border-2)', padding: '4px 8px', cursor: 'pointer', color: 'var(--text-3)', flexShrink: 0, display: 'flex', alignItems: 'center', gap: 4 }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor='var(--text)'; e.currentTarget.style.color='var(--text)' }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor='var(--border-2)'; e.currentTarget.style.color='var(--text-3)' }}
+            >
+              <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+                <circle cx="6.5" cy="6.5" r="5.5" stroke="currentColor" strokeWidth="1.2"/>
+                <path d="M6.5 5.5v4M6.5 4h.01" stroke="currentColor" strokeWidth="1.4" strokeLinecap="square"/>
+              </svg>
+              <span style={{ fontSize: 10, fontFamily: 'DM Sans, sans-serif' }}>How to</span>
+            </button>
           </div>
 
           {/* Logged sets */}
@@ -299,6 +314,17 @@ export default function ActiveSession({ programId, sessionId, sessionName, exerc
 
       {showTimer && (
         <RestTimer seconds={timerSecs} onDone={() => setShowTimer(false)} />
+      )}
+
+      {/* Exercise detail modal */}
+      {detailEx && (
+        <ExerciseDetailModal
+          exercise={detailEx.exercise}
+          sets={detailEx.target_sets}
+          reps={detailEx.target_reps}
+          rest={detailEx.rest_seconds}
+          onClose={() => setDetailEx(null)}
+        />
       )}
     </div>
   )
