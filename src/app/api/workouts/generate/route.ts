@@ -170,11 +170,16 @@ function assignDays(
 // ExerciseDB API returns equipment as a single string (e.g. "dumbbell", "barbell").
 // The old code called .some() on a string which always returned false,
 // causing nearly every exercise to be filtered out (leaving only 1-2 per session).
-function equipmentMatches(exEquipment: string | null, userEquipment: string[]): boolean {
-  if (!exEquipment) return true                          // no equipment needed — always include
-  const eq = exEquipment.toLowerCase().trim()
-  if (eq === 'body weight' || eq === 'bodyweight') return true  // bodyweight always allowed
-  return userEquipment.some(e => e.toLowerCase().trim() === eq)
+function equipmentMatches(exEquipment: string | string[] | null | undefined, userEquipment: string[]): boolean {
+  if (!exEquipment) return true
+  // DB rows may have stored equipment as an array (old ingestion) or a string (ExerciseDB API)
+  const eqValues: string[] = Array.isArray(exEquipment) ? exEquipment : [exEquipment]
+  return eqValues.some(raw => {
+    if (typeof raw !== 'string') return false
+    const eq = raw.toLowerCase().trim()
+    if (eq === 'body weight' || eq === 'bodyweight') return true
+    return userEquipment.some(e => e.toLowerCase().trim() === eq)
+  })
 }
 
 // ── FIX: fuzzy name matching so minor casing/spacing differences don't drop exercises ──
