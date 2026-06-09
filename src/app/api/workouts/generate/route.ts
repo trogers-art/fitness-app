@@ -44,9 +44,9 @@ const SPLITS: Record<string, Record<number, { focus: string; muscles: string[] }
   },
   muscle_gain: {
     3: [
-      { focus: 'Push',          muscles: ['chest','shoulders','triceps'] },
-      { focus: 'Pull',          muscles: ['back','biceps','forearms'] },
-      { focus: 'Legs',          muscles: ['quads','hamstrings','glutes','calves'] },
+      { focus: 'Push',            muscles: ['chest','shoulders','triceps'] },
+      { focus: 'Pull',            muscles: ['back','biceps','forearms'] },
+      { focus: 'Legs',            muscles: ['quads','hamstrings','glutes','calves'] },
     ],
     4: [
       { focus: 'Chest & Triceps', muscles: ['chest','triceps'] },
@@ -62,12 +62,12 @@ const SPLITS: Record<string, Record<number, { focus: string; muscles: string[] }
       { focus: 'Full Body',       muscles: ['chest','back','quads','hamstrings','shoulders','core'] },
     ],
     6: [
-      { focus: 'Push A',        muscles: ['chest','shoulders','triceps'] },
-      { focus: 'Pull A',        muscles: ['back','biceps','forearms'] },
-      { focus: 'Legs A',        muscles: ['quads','hamstrings','glutes','calves'] },
-      { focus: 'Push B',        muscles: ['chest','shoulders','triceps'] },
-      { focus: 'Pull B',        muscles: ['back','biceps','forearms'] },
-      { focus: 'Legs B',        muscles: ['quads','hamstrings','glutes','calves'] },
+      { focus: 'Push A',          muscles: ['chest','shoulders','triceps'] },
+      { focus: 'Pull A',          muscles: ['back','biceps','forearms'] },
+      { focus: 'Legs A',          muscles: ['quads','hamstrings','glutes','calves'] },
+      { focus: 'Push B',          muscles: ['chest','shoulders','triceps'] },
+      { focus: 'Pull B',          muscles: ['back','biceps','forearms'] },
+      { focus: 'Legs B',          muscles: ['quads','hamstrings','glutes','calves'] },
     ],
   },
   maintain: {
@@ -145,9 +145,11 @@ const MUSCLE_MAP: Record<string, string[]> = {
 }
 
 // Assign days of week to sessions, skipping rest days
-function assignDays(sessions: { focus: string; muscles: string[] }[], daysPerWeek: number): { day_of_week: number; focus: string; muscles: string[] }[] {
-  // Spread training days evenly across the week
-  const daySlots: number[] = {
+function assignDays(
+  sessions: { focus: string; muscles: string[] }[],
+  daysPerWeek: number
+): { day_of_week: number; focus: string; muscles: string[] }[] {
+  const daySlots: Record<number, number[]> = {
     1: [1],
     2: [1,4],
     3: [1,3,5],
@@ -155,13 +157,30 @@ function assignDays(sessions: { focus: string; muscles: string[] }[], daysPerWee
     5: [1,2,3,5,6],
     6: [1,2,3,4,5,6],
     7: [1,2,3,4,5,6,7],
-  }[daysPerWeek] || [1,2,3,4,5]
-
+  }
+  const slots = daySlots[daysPerWeek] || [1,2,3,4,5]
   return sessions.map((session, i) => ({
-    day_of_week: daySlots[i] || i + 1,
+    day_of_week: slots[i] ?? i + 1,
     focus:       session.focus,
     muscles:     session.muscles,
   }))
+}
+
+// ── FIX: equipment is stored as a plain string in the DB, not an array ──────
+// ExerciseDB API returns equipment as a single string (e.g. "dumbbell", "barbell").
+// The old code called .some() on a string which always returned false,
+// causing nearly every exercise to be filtered out (leaving only 1-2 per session).
+function equipmentMatches(exEquipment: string | null, userEquipment: string[]): boolean {
+  if (!exEquipment) return true                          // no equipment needed — always include
+  const eq = exEquipment.toLowerCase().trim()
+  if (eq === 'body weight' || eq === 'bodyweight') return true  // bodyweight always allowed
+  return userEquipment.some(e => e.toLowerCase().trim() === eq)
+}
+
+// ── FIX: fuzzy name matching so minor casing/spacing differences don't drop exercises ──
+// Build a normalised key by lowercasing and collapsing whitespace.
+function normaliseName(name: string): string {
+  return name.toLowerCase().replace(/\s+/g, ' ').trim()
 }
 
 export async function POST(request: NextRequest) {
@@ -185,11 +204,11 @@ export async function POST(request: NextRequest) {
   const goalParam = GOAL_PARAMS[goal] || GOAL_PARAMS.muscle_gain
 
   // Get split for goal + days
-  const splitKey  = Math.min(days_per_week, 6)
-  const rawSplit  = SPLITS[goal]?.[splitKey] || SPLITS.muscle_gain[Math.min(days_per_week,6)]
-  const sessions  = assignDays(rawSplit, days_per_week)
+  const splitKey = Math.min(days_per_week, 6)
+  const rawSplit = SPLITS[goal]?.[splitKey] || SPLITS.muscle_gain[Math.min(days_per_week, 6)]
+  const sessions = assignDays(rawSplit, days_per_week)
 
-  // Fetch exercises filtered by muscle groups and equipment
+  // Fetch all exercises for the muscles used across this program
   const allMuscles = [...new Set(sessions.flatMap(s => s.muscles))]
   const { data: allExercises } = await supabase
     .from('exercises')
@@ -203,7 +222,7 @@ export async function POST(request: NextRequest) {
 
   // Create program
   const imperial    = profile?.weight_kg ? Math.round(profile.weight_kg * 2.20462) + ' lbs' : 'unknown'
-  const programName = `${goal.replace('_',' ')} · ${days_per_week}×/week · ${experience}`
+  const programName = `${goal.replace('_', ' ')} · ${days_per_week}×/week · ${experience}`
 
   const { data: program, error: progErr } = await supabase
     .from('programs')
@@ -223,30 +242,33 @@ export async function POST(request: NextRequest) {
 
   // Generate each session separately — small prompt, guaranteed to fit
   for (const session of sessions) {
-    // Filter exercises for this session's muscles
     const sessionMuscles = session.muscles.flatMap(m => MUSCLE_MAP[m] || [m])
+
+    // ── FIX 1: equipment comparison uses string equality, not .some() on a string ──
     const sessionExercises = (allExercises || []).filter(ex =>
       sessionMuscles.includes(ex.muscle_group) &&
-      (equipment.length === 0 || ex.equipment?.some((e: string) => equipment.includes(e)) || ex.equipment?.includes('bodyweight'))
+      equipmentMatches(ex.equipment, equipment)
     )
 
-    // Group by muscle for the prompt
+    // Group by muscle for the prompt — cap at 12 per muscle to stay within token budget
     const byMuscle: Record<string, string[]> = {}
     for (const ex of sessionExercises) {
       if (!byMuscle[ex.muscle_group]) byMuscle[ex.muscle_group] = []
       byMuscle[ex.muscle_group].push(ex.name)
     }
     const exerciseList = Object.entries(byMuscle)
-      .map(([m, exs]) => `${m.toUpperCase()}: ${exs.slice(0, 10).join(', ')}`)
+      .map(([m, exs]) => `${m.toUpperCase()}: ${exs.slice(0, 12).join(', ')}`)
       .join('\n')
+
+    const minExercises = goalParam.compounds + goalParam.isolation
 
     const prompt = `Strength coach. Generate ONE training session. JSON only, no markdown.
 
 Session: ${session.focus}
-Goal: ${goal.replace('_',' ')} | Experience: ${experience} | Weight: ${imperial}
+Goal: ${goal.replace('_', ' ')} | Experience: ${experience} | Weight: ${imperial}
 Style: ${goalParam.style}
 Rep ranges: ${goalParam.reps} | Rest: ${goalParam.rest}s | Sets: ${goalParam.sets}
-Minimum exercises: ${goalParam.compounds} compound + ${goalParam.isolation} isolation = at least ${goalParam.compounds + goalParam.isolation} total
+YOU MUST include EXACTLY ${minExercises} to 8 exercises. DO NOT return fewer than ${minExercises}.
 ${injuries ? `Avoid: ${injuries}` : ''}
 
 AVAILABLE EXERCISES (use exact names only):
@@ -254,9 +276,9 @@ ${exerciseList}
 
 Rules:
 - Start with compound movements, finish with isolation
-- Each exercise needs sets, reps, rest_seconds, order_index
-- Use ONLY exercise names from the list above
-- Minimum ${goalParam.compounds + goalParam.isolation} exercises, maximum 8
+- Each exercise: target_sets, target_reps, rest_seconds, order_index (0-based)
+- Use ONLY exercise names from the list above — exact spelling
+- Return ${minExercises} exercises minimum, 8 maximum
 
 JSON:
 {"exercises":[{"exercise_name":"EXACT NAME","target_sets":3,"target_reps":"8-12","rest_seconds":90,"order_index":0}]}`
@@ -268,25 +290,46 @@ JSON:
         messages:   [{ role: 'user', content: prompt }],
       })
 
-      const text    = (message.content.find((b: any) => b.type === 'text') as any)?.text ?? ''
-      const clean   = text.replace(/```json|```/g, '').trim()
+      const text  = (message.content.find((b: any) => b.type === 'text') as any)?.text ?? ''
+      const clean = text.replace(/```json|```/g, '').trim()
       const result: any = JSON.parse(clean)
 
-      // Match exercise names to IDs
+      // ── FIX 2: build nameToId from sessionExercises (what Claude actually saw),
+      // not allExercises. Use normalised keys so minor whitespace/casing diffs match. ──
       const nameToId: Record<string, string> = {}
-      for (const ex of allExercises || []) nameToId[ex.name.toLowerCase()] = ex.id
+      for (const ex of sessionExercises) {
+        nameToId[normaliseName(ex.name)] = ex.id
+      }
 
       const sessionExs = (result.exercises || [])
         .map((ex: any, i: number) => {
-          const id = nameToId[ex.exercise_name?.toLowerCase()]
-          if (!id) { console.warn('No match for:', ex.exercise_name); return null }
-          return { exercise_id: id, order_index: i, target_sets: ex.target_sets || 3, target_reps: ex.target_reps || goalParam.reps, rest_seconds: ex.rest_seconds || goalParam.rest }
+          const key = normaliseName(ex.exercise_name ?? '')
+          const id  = nameToId[key]
+          if (!id) {
+            console.warn(`[workout-gen] No DB match for: "${ex.exercise_name}" (normalised: "${key}")`)
+            return null
+          }
+          return {
+            exercise_id:  id,
+            order_index:  i,
+            target_sets:  ex.target_sets  || 3,
+            target_reps:  ex.target_reps  || goalParam.reps,
+            rest_seconds: ex.rest_seconds || goalParam.rest,
+          }
         })
         .filter(Boolean)
 
+      // Log how many survived matching so we can catch regressions
+      console.log(`[workout-gen] ${session.focus}: Claude returned ${result.exercises?.length ?? 0}, matched ${sessionExs.length}`)
+
       const { data: sess } = await supabase
         .from('sessions')
-        .insert({ program_week_id: week!.id, user_id: user.id, day_of_week: session.day_of_week, focus: session.focus })
+        .insert({
+          program_week_id: week!.id,
+          user_id:         user.id,
+          day_of_week:     session.day_of_week,
+          focus:           session.focus,
+        })
         .select('id').single()
 
       if (sess && sessionExs.length > 0) {
@@ -295,7 +338,7 @@ JSON:
         )
       }
     } catch (e: unknown) {
-      console.error(`Session ${session.focus} error:`, e)
+      console.error(`[workout-gen] Session ${session.focus} error:`, e)
     }
   }
 
