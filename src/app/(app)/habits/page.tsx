@@ -122,7 +122,7 @@ function computeStreaks(logs: HabitLog[]): { current: number; longest: number; r
 
 // ── Add Habit Modal ────────────────────────────────────────────────────────
 
-const CATEGORIES = ['sleep','hydration','nutrition','movement','mindset','other'] as const
+const CATEGORIES = ['sleep','hydration','nutrition','movement','mindset','learning','finance','social','productivity','recovery','creativity','other'] as const
 type Category = typeof CATEGORIES[number]
 
 function AddHabitModal({ onSaved, onClose }: { onSaved: (h: Habit) => void; onClose: () => void }) {
