@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
       name:         name.trim(),
       type,
       target_count: type === 'count' ? (target_count || 1) : 1,
-      category:     category || null,
+      category:     category || '',
       frequency:    'daily',
       active:       true,
       order_index:  count || 0,
