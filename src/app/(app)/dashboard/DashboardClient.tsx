@@ -16,6 +16,11 @@ interface TodaySession {
   session_exercises: SessionExercise[]
 }
 
+interface HabitStatus {
+  id: string; name: string; type: string
+  target: number; done: boolean; count: number
+}
+
 interface Props {
   profile: Partial<UserProfile> | null
   emailConfirmed: boolean
@@ -24,17 +29,28 @@ interface Props {
   latestCheckin: { explanation: string; created_at: string } | null
   activeProgram: { id: string; name: string } | null
   todaySession: TodaySession | null
+  habits: HabitStatus[]
 }
 
 const kgToLbs = (kg: number) => Math.round(kg * 2.20462 * 10) / 10
 
 const L: Record<string, React.CSSProperties> = {
-  label:   { fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--text-3)', fontWeight: 500 },
-  card:    { background: 'var(--surface)', border: '1px solid var(--border)', padding: '18px 20px' },
+  label: { fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--text-3)', fontWeight: 500 },
+  card:  { background: 'var(--surface)', border: '1px solid var(--border)', padding: '18px 20px' },
+}
+
+const emptyCard: React.CSSProperties = {
+  background: 'var(--surface-2)',
+  border: '1px solid var(--border)',
+  padding: '16px 18px',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  gap: 12,
 }
 
 function MacroBar({ label, eaten, target, color }: { label: string; eaten: number; target: number; color: string }) {
-  const pct = Math.min(100, target > 0 ? (eaten / target) * 100 : 0)
+  const pct  = Math.min(100, target > 0 ? (eaten / target) * 100 : 0)
   const over = eaten > target
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
@@ -52,7 +68,10 @@ function MacroBar({ label, eaten, target, color }: { label: string; eaten: numbe
   )
 }
 
-export default function DashboardClient({ profile, emailConfirmed, todayNutrition, recentWeights, latestCheckin, activeProgram, todaySession }: Props) {
+export default function DashboardClient({
+  profile, emailConfirmed, todayNutrition, recentWeights,
+  latestCheckin, activeProgram, todaySession, habits,
+}: Props) {
   if (!profile) return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '80px 0', gap: 16 }}>
       <p style={{ color: 'var(--text-2)', fontSize: 14 }}>No profile found.</p>
@@ -61,26 +80,30 @@ export default function DashboardClient({ profile, emailConfirmed, todayNutritio
   )
 
   const imperial = (profile.units ?? 'metric') === 'imperial'
-  const n = todayNutrition || { total_calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0, workout_calories_burned: 0 }
-  const net = n.total_calories - n.workout_calories_burned
+  const n        = todayNutrition || { total_calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0, workout_calories_burned: 0 }
+  const net       = n.total_calories - n.workout_calories_burned
   const remaining = (profile.daily_calories ?? 0) - net
-  const over = remaining < 0
+  const over      = remaining < 0
+  const hasFood   = n.total_calories > 0
 
   const rollingKg = computeRollingAverage(recentWeights.map(w => ({ date: w.logged_at, weight_kg: w.weight_kg })))
   const latestKg  = recentWeights[0]?.weight_kg
   const display   = (kg: number) => imperial ? `${kgToLbs(kg)} lbs` : `${kg} kg`
 
   const chartData = [...recentWeights].reverse().map(w => ({
-    date: new Date(w.logged_at).toLocaleDateString('en', { month: 'short', day: 'numeric' }),
+    date:   new Date(w.logged_at).toLocaleDateString('en', { month: 'short', day: 'numeric' }),
     weight: imperial ? kgToLbs(w.weight_kg) : w.weight_kg,
   }))
+
+  const doneCount  = habits.filter(h => h.done).length
+  const totalCount = habits.length
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
 
       {/* Email banner */}
       {!emailConfirmed && (
-        <div style={{ padding: '10px 14px', borderLeft: '2px solid var(--amber)', background: 'transparent', fontSize: 12, color: 'var(--amber)' }}>
+        <div style={{ padding: '10px 14px', borderLeft: '2px solid var(--amber)', fontSize: 12, color: 'var(--amber)' }}>
           Confirm your email — check your inbox.
         </div>
       )}
@@ -95,53 +118,129 @@ export default function DashboardClient({ profile, emailConfirmed, todayNutritio
       </div>
 
       {/* Calories */}
-      <div style={L.card}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}>
-          <span style={L.label}>Calories remaining</span>
-          <div style={{ display: 'flex', gap: 14, fontSize: 10, color: 'var(--text-3)', fontFamily: 'DM Mono, monospace' }}>
-            <span>Eaten <span style={{ color: 'var(--text-2)' }}>{n.total_calories}</span></span>
-            <span>Burned <span style={{ color: 'var(--text-2)' }}>{n.workout_calories_burned}</span></span>
-            <span>Target <span style={{ color: 'var(--text-2)' }}>{(profile.daily_calories ?? 0)}</span></span>
+      {hasFood ? (
+        <div style={L.card}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}>
+            <span style={L.label}>Calories remaining</span>
+            <div style={{ display: 'flex', gap: 14, fontSize: 10, color: 'var(--text-3)', fontFamily: 'DM Mono, monospace' }}>
+              <span>Eaten <span style={{ color: 'var(--text-2)' }}>{n.total_calories}</span></span>
+              <span>Burned <span style={{ color: 'var(--text-2)' }}>{n.workout_calories_burned}</span></span>
+              <span>Target <span style={{ color: 'var(--text-2)' }}>{profile.daily_calories ?? 0}</span></span>
+            </div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 12 }}>
+            <span style={{ fontSize: 46, fontFamily: 'DM Mono, monospace', fontWeight: 500, lineHeight: 1, color: over ? 'var(--red)' : 'var(--text)' }}>
+              {over ? '+' : ''}{Math.abs(remaining).toLocaleString()}
+            </span>
+            <span style={{ fontSize: 11, color: 'var(--text-3)' }}>kcal {over ? 'over' : 'left'}</span>
+          </div>
+          <div style={{ height: 1, background: 'var(--border-2)' }}>
+            <div style={{ height: '100%', width: `${Math.min(100, (net / (profile.daily_calories ?? 1)) * 100)}%`, background: over ? 'var(--red)' : 'var(--text)', transition: 'width 0.7s ease' }} />
           </div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 12 }}>
-          <span style={{ fontSize: 46, fontFamily: 'DM Mono, monospace', fontWeight: 500, lineHeight: 1, color: over ? 'var(--red)' : 'var(--text)' }}>
-            {over ? '+' : ''}{Math.abs(remaining).toLocaleString()}
-          </span>
-          <span style={{ fontSize: 11, color: 'var(--text-3)' }}>kcal {over ? 'over' : 'left'}</span>
+      ) : (
+        <div style={emptyCard}>
+          <div>
+            <p style={{ ...L.label, marginBottom: 4 }}>Calories</p>
+            <p style={{ fontSize: 13, color: 'var(--text-2)', margin: 0 }}>Nothing logged today</p>
+          </div>
+          <Link href="/food" className="btn" style={{ fontSize: 11, padding: '6px 12px', whiteSpace: 'nowrap' }}>Log food</Link>
         </div>
-        <div style={{ height: 1, background: 'var(--border-2)' }}>
-          <div style={{ height: '100%', width: `${Math.min(100, (net / (profile.daily_calories ?? 1)) * 100)}%`, background: over ? 'var(--red)' : 'var(--text)', transition: 'width 0.7s ease' }} />
-        </div>
-      </div>
+      )}
 
       {/* Macros */}
-      <div style={{ ...L.card, display: 'flex', flexDirection: 'column', gap: 12 }}>
-        <span style={L.label}>Macros</span>
-        <MacroBar label="Protein" eaten={n.protein_g} target={profile.protein_g ?? 0} color="var(--blue)" />
-        <MacroBar label="Carbs"   eaten={n.carbs_g}   target={profile.carbs_g ?? 0}   color="var(--amber)" />
-        <MacroBar label="Fat"     eaten={n.fat_g}     target={profile.fat_g ?? 0}     color="var(--red)" />
-      </div>
+      {hasFood ? (
+        <div style={{ ...L.card, display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <span style={L.label}>Macros</span>
+          <MacroBar label="Protein" eaten={n.protein_g} target={profile.protein_g ?? 0} color="var(--blue)"  />
+          <MacroBar label="Carbs"   eaten={n.carbs_g}   target={profile.carbs_g   ?? 0} color="var(--amber)" />
+          <MacroBar label="Fat"     eaten={n.fat_g}     target={profile.fat_g     ?? 0} color="var(--red)"   />
+        </div>
+      ) : null}
+
+      {/* Habits */}
+      {totalCount > 0 ? (
+        <div style={L.card}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+            <span style={L.label}>Habits today</span>
+            <span style={{
+              fontSize: 10, fontFamily: 'DM Mono, monospace',
+              color: doneCount === totalCount ? 'var(--green)' : 'var(--text-3)',
+            }}>
+              {doneCount} / {totalCount} done
+            </span>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+            {habits.map(h => (
+              <div key={h.id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{
+                  width: 14, height: 14, flexShrink: 0,
+                  border: `1px solid ${h.done ? 'var(--green)' : 'var(--border-2)'}`,
+                  background: h.done ? 'var(--green)' : 'transparent',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  {h.done && (
+                    <svg width="9" height="9" viewBox="0 0 9 9" fill="none">
+                      <path d="M1 5l2.5 2.5L8 1.5" stroke="white" strokeWidth="1.3" strokeLinecap="square"/>
+                    </svg>
+                  )}
+                </div>
+                <span style={{
+                  fontSize: 12, color: h.done ? 'var(--text-3)' : 'var(--text)',
+                  textDecoration: h.done ? 'line-through' : 'none',
+                  opacity: h.done ? 0.6 : 1,
+                }}>
+                  {h.name}
+                  {h.type === 'count' && !h.done && (
+                    <span style={{ fontFamily: 'DM Mono, monospace', fontSize: 10, color: 'var(--text-3)', marginLeft: 6 }}>
+                      {h.count}/{h.target}
+                    </span>
+                  )}
+                </span>
+              </div>
+            ))}
+          </div>
+          <Link href="/habits" style={{ display: 'block', marginTop: 12, fontSize: 11, color: 'var(--text-3)', textDecoration: 'none' }}
+            onMouseEnter={e => (e.currentTarget.style.color = 'var(--text-2)')}
+            onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-3)')}>
+            View all habits →
+          </Link>
+        </div>
+      ) : (
+        <div style={emptyCard}>
+          <div>
+            <p style={{ ...L.label, marginBottom: 4 }}>Habits</p>
+            <p style={{ fontSize: 13, color: 'var(--text-2)', margin: 0 }}>No habits set up yet</p>
+          </div>
+          <Link href="/habits" className="btn" style={{ fontSize: 11, padding: '6px 12px', whiteSpace: 'nowrap' }}>Add habits</Link>
+        </div>
+      )}
 
       {/* Weight chart */}
-      {recentWeights.length > 0 && (
+      {recentWeights.length > 0 ? (
         <div style={L.card}>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}>
             <span style={L.label}>Weight trend</span>
-            <Link href="/body" style={{ ...L.label, color: 'var(--text-2)', textDecoration: 'none', marginBottom: 0 }}>Log weight</Link>
+            <Link href="/body" style={{ ...L.label, color: 'var(--text-2)', textDecoration: 'none' }}>Log weight</Link>
           </div>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 12 }}>
             {latestKg && <span style={{ fontSize: 22, fontFamily: 'DM Mono, monospace', color: 'var(--text)' }}>{display(latestKg)}</span>}
-            {rollingKg && <span style={{ fontSize: 11, color: 'var(--text-3)' }}>7-day avg <span style={{ color: 'var(--text-2)', fontFamily: 'DM Mono, monospace' }}>{display(rollingKg)}</span></span>}
+            {rollingKg && (
+              <span style={{ fontSize: 11, color: 'var(--text-3)' }}>
+                7-day avg <span style={{ color: 'var(--text-2)', fontFamily: 'DM Mono, monospace' }}>{display(rollingKg)}</span>
+              </span>
+            )}
           </div>
           {chartData.length > 1 && (
             <div style={{ height: 96 }}>
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={chartData}>
                   <XAxis dataKey="date" tick={{ fontSize: 9, fill: 'var(--text-3)' }} tickLine={false} axisLine={false} />
-                  <YAxis domain={['auto', 'auto']} tick={{ fontSize: 9, fill: 'var(--text-3)' }} tickLine={false} axisLine={false} width={30} />
-                  <Tooltip contentStyle={{ background: 'var(--surface-2)', border: '1px solid var(--border-2)', borderRadius: 0, fontSize: 11, color: 'var(--text)' }}
-                    formatter={(v: number) => [imperial ? `${v} lbs` : `${v} kg`, 'Weight']} />
+                  <YAxis domain={['auto','auto']} tick={{ fontSize: 9, fill: 'var(--text-3)' }} tickLine={false} axisLine={false} width={30} />
+                  <Tooltip
+                    contentStyle={{ background: 'var(--surface-2)', border: '1px solid var(--border-2)', borderRadius: 0, fontSize: 11, color: 'var(--text)' }}
+                    formatter={(v: number) => [imperial ? `${v} lbs` : `${v} kg`, 'Weight']}
+                  />
                   {rollingKg && <ReferenceLine y={imperial ? kgToLbs(rollingKg) : rollingKg} stroke="var(--text-3)" strokeDasharray="3 3" />}
                   <Line type="monotone" dataKey="weight" stroke="var(--text)" strokeWidth={1.5} dot={{ r: 2, fill: 'var(--text)', strokeWidth: 0 }} />
                 </LineChart>
@@ -149,11 +248,19 @@ export default function DashboardClient({ profile, emailConfirmed, todayNutritio
             </div>
           )}
         </div>
+      ) : (
+        <div style={emptyCard}>
+          <div>
+            <p style={{ ...L.label, marginBottom: 4 }}>Weight</p>
+            <p style={{ fontSize: 13, color: 'var(--text-2)', margin: 0 }}>No weight logged yet</p>
+          </div>
+          <Link href="/body" className="btn" style={{ fontSize: 11, padding: '6px 12px', whiteSpace: 'nowrap' }}>Log weight</Link>
+        </div>
       )}
 
       {/* Check-in */}
       {latestCheckin && (
-        <div style={{ ...L.card, borderLeft: '2px solid var(--text-3)' }}>
+        <div style={{ ...L.card, borderLeft: '2px solid var(--text-3)', paddingLeft: 16 }}>
           <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 8 }}>
             <span style={L.label}>Weekly check-in</span>
             <span style={{ fontSize: 9, color: 'var(--text-3)' }}>{new Date(latestCheckin.created_at).toLocaleDateString()}</span>
@@ -164,35 +271,58 @@ export default function DashboardClient({ profile, emailConfirmed, todayNutritio
 
       {/* Quick actions */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-        <Link href="/food" style={{ ...L.card, display: 'flex', alignItems: 'center', gap: 12, textDecoration: 'none' }}>
+        {/* Scan food — opens barcode tab directly */}
+        <Link href="/food?tab=barcode" style={{ ...L.card, display: 'flex', alignItems: 'center', gap: 12, textDecoration: 'none' }}>
           <div style={{ width: 34, height: 34, border: '1px solid var(--border-2)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-3)', flexShrink: 0 }}>
-            <svg width="14" height="14" viewBox="0 0 15 15" fill="none"><rect x="1" y="1" width="4" height="4" stroke="currentColor" strokeWidth="1.2"/><rect x="10" y="1" width="4" height="4" stroke="currentColor" strokeWidth="1.2"/><rect x="1" y="10" width="4" height="4" stroke="currentColor" strokeWidth="1.2"/><rect x="7" y="7" width="1.5" height="1.5" fill="currentColor"/><rect x="10" y="7" width="1.5" height="1.5" fill="currentColor"/><rect x="7" y="10" width="1.5" height="1.5" fill="currentColor"/><rect x="10" y="10" width="4" height="4" stroke="currentColor" strokeWidth="1.2"/></svg>
+            <svg width="14" height="14" viewBox="0 0 15 15" fill="none">
+              <rect x="1" y="1" width="4" height="4" stroke="currentColor" strokeWidth="1.2"/>
+              <rect x="10" y="1" width="4" height="4" stroke="currentColor" strokeWidth="1.2"/>
+              <rect x="1" y="10" width="4" height="4" stroke="currentColor" strokeWidth="1.2"/>
+              <rect x="7" y="7" width="1.5" height="1.5" fill="currentColor"/>
+              <rect x="10" y="7" width="1.5" height="1.5" fill="currentColor"/>
+              <rect x="7" y="10" width="1.5" height="1.5" fill="currentColor"/>
+              <rect x="10" y="10" width="4" height="4" stroke="currentColor" strokeWidth="1.2"/>
+            </svg>
           </div>
           <div>
             <p style={{ fontSize: 13, fontWeight: 500, color: 'var(--text)', margin: 0 }}>Scan food</p>
             <p style={{ fontSize: 11, color: 'var(--text-3)', margin: '2px 0 0' }}>Quick log</p>
           </div>
         </Link>
-        <Link href={todaySession ? `/workouts?start=${activeProgram?.id}&session=${todaySession.id}` : '/workouts'}
-          style={{ ...L.card, display: 'flex', alignItems: 'center', gap: 12, textDecoration: 'none' }}>
-          <div style={{ width: 34, height: 34, border: '1px solid var(--border-2)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: todaySession ? 'var(--text)' : 'var(--text-3)', flexShrink: 0 }}>
-            {todaySession
-              ? <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><polygon points="2.5,1 12,6.5 2.5,12" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="miter" fill="none"/></svg>
-              : <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M1 6.5h11M6.5 1v11" stroke="currentColor" strokeWidth="1.2" strokeLinecap="square"/></svg>
-            }
-          </div>
-          <div>
-            <p style={{ fontSize: 13, fontWeight: 500, color: 'var(--text)', margin: 0 }}>
-              {todaySession ? todaySession.focus : 'Rest day'}
-            </p>
-            <p style={{ fontSize: 11, color: 'var(--text-3)', margin: '2px 0 0' }}>
+
+        {/* Today's workout or rest day */}
+        {activeProgram ? (
+          <Link
+            href={todaySession ? `/workouts?start=${activeProgram.id}&session=${todaySession.id}` : '/workouts'}
+            style={{ ...L.card, display: 'flex', alignItems: 'center', gap: 12, textDecoration: 'none' }}>
+            <div style={{ width: 34, height: 34, border: '1px solid var(--border-2)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: todaySession ? 'var(--text)' : 'var(--text-3)', flexShrink: 0 }}>
               {todaySession
-                ? `${todaySession.session_exercises.length} exercises · ${activeProgram?.name}`
-                : activeProgram ? activeProgram.name : 'No active program'}
-            </p>
-          </div>
-        </Link>
+                ? <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><polygon points="2.5,1 12,6.5 2.5,12" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="miter" fill="none"/></svg>
+                : <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M6.5 1v11M1 6.5h11" stroke="currentColor" strokeWidth="1.2" strokeLinecap="square"/></svg>
+              }
+            </div>
+            <div>
+              <p style={{ fontSize: 13, fontWeight: 500, color: 'var(--text)', margin: 0 }}>
+                {todaySession ? todaySession.focus : 'Rest day'}
+              </p>
+              <p style={{ fontSize: 11, color: 'var(--text-3)', margin: '2px 0 0' }}>
+                {todaySession
+                  ? `${todaySession.session_exercises.length} exercises · ${activeProgram.name}`
+                  : activeProgram.name}
+              </p>
+            </div>
+          </Link>
+        ) : (
+          <Link href="/workouts" style={{ ...emptyCard, textDecoration: 'none', padding: '14px 16px' }}>
+            <div>
+              <p style={{ ...L.label, marginBottom: 4 }}>Workout</p>
+              <p style={{ fontSize: 13, color: 'var(--text-2)', margin: 0 }}>No active program</p>
+            </div>
+            <span style={{ fontSize: 11, color: 'var(--text-3)', whiteSpace: 'nowrap' }}>Create →</span>
+          </Link>
+        )}
       </div>
+
     </div>
   )
 }
