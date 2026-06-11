@@ -122,12 +122,16 @@ function computeStreaks(logs: HabitLog[]): { current: number; longest: number; r
 
 // ── Add Habit Modal ────────────────────────────────────────────────────────
 
+const CATEGORIES = ['sleep','hydration','nutrition','movement','mindset','other'] as const
+type Category = typeof CATEGORIES[number]
+
 function AddHabitModal({ onSaved, onClose }: { onSaved: (h: Habit) => void; onClose: () => void }) {
-  const [name,        setName]        = useState('')
-  const [type,        setType]        = useState<'binary' | 'count'>('binary')
-  const [target,      setTarget]      = useState(8)
-  const [saving,      setSaving]      = useState(false)
-  const [error,       setError]       = useState<string | null>(null)
+  const [name,     setName]     = useState('')
+  const [type,     setType]     = useState<'binary' | 'count'>('binary')
+  const [target,   setTarget]   = useState(8)
+  const [category, setCategory] = useState<Category>('other')
+  const [saving,   setSaving]   = useState(false)
+  const [error,    setError]    = useState<string | null>(null)
 
   async function handleSave() {
     if (!name.trim()) { setError('Name required'); return }
@@ -136,7 +140,7 @@ function AddHabitModal({ onSaved, onClose }: { onSaved: (h: Habit) => void; onCl
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
-      body: JSON.stringify({ name, type, target_count: target }),
+      body: JSON.stringify({ name, type, target_count: target, category }),
     })
     const data = await res.json()
     if (!res.ok) { setError(data.error || 'Failed to save'); setSaving(false); return }
@@ -184,6 +188,23 @@ function AddHabitModal({ onSaved, onClose }: { onSaved: (h: Habit) => void; onCl
             <p style={{ fontSize: 10, color: 'var(--text-3)', margin: '6px 0 0' }}>
               {type === 'binary' ? 'Mark as done each day.' : 'Track a number — glasses of water, pages read, etc.'}
             </p>
+          </div>
+          <div>
+            <p style={{ ...S.lbl, marginBottom: 8 }}>Category</p>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {CATEGORIES.map(c => (
+                <button key={c} onClick={() => setCategory(c)}
+                  style={{
+                    padding: '5px 10px', fontSize: 11, border: '1px solid', cursor: 'pointer',
+                    fontFamily: 'DM Sans, sans-serif', textTransform: 'capitalize',
+                    borderColor: category === c ? 'var(--text)' : 'var(--border-2)',
+                    background: category === c ? 'var(--btn-bg)' : 'transparent',
+                    color: category === c ? 'var(--btn-fg)' : 'var(--text-2)',
+                  }}>
+                  {c}
+                </button>
+              ))}
+            </div>
           </div>
           {type === 'count' && (
             <div>

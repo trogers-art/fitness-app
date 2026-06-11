@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await request.json()
-  const { name, type = 'binary', target_count = 1, category = '' } = body
+  const { name, type = 'binary', target_count = 1, category = 'other' } = body
 
   if (!name?.trim()) return NextResponse.json({ error: 'Name required' }, { status: 400 })
 
@@ -42,7 +42,8 @@ export async function POST(request: NextRequest) {
       name:         name.trim(),
       type,
       target_count: type === 'count' ? (target_count || 1) : 1,
-      category:     category || '',
+      
+      category:     category,
       frequency:    'daily',
       active:       true,
       order_index:  count || 0,
