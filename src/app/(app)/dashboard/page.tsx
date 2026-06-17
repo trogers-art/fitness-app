@@ -9,22 +9,32 @@ export default async function DashboardPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const today = new Date().toISOString().split('T')[0]
-  const jsDay = new Date().getDay()
-  const dayOfWeek = jsDay === 0 ? 7 : jsDay
+  // Get profile including timezone
+  const { data: profile } = await supabase
+    .from('user_profiles')
+    .select('daily_calories, protein_g, carbs_g, fat_g, units, goal, timezone')
+    .eq('user_id', user.id).single()
 
-  const [profileRes, entriesRes, weightsRes, checkinRes, activeProgramRes, habitsRes, habitLogsRes] = await Promise.all([
-    supabase.from('user_profiles')
-      .select('daily_calories, protein_g, carbs_g, fat_g, units, goal')
-      .eq('user_id', user.id).single(),
+  const tz = profile?.timezone || 'UTC'
 
-    // Query food_entries directly — always fresh, no sync dependency
-    supabase.from('food_entries')
-      .select('calories_total, protein_total, carbs_total, fat_total')
-      .eq('user_id', user.id)
-      .gte('logged_at', `${today}T00:00:00.000Z`)
-      .lte('logged_at', `${today}T23:59:59.999Z`),
+  // Compute today's date in the user's local timezone
+  const now   = new Date()
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(now) // YYYY-MM-DD
 
+  // Get day of week in user's timezone (0=Sun, 1=Mon ... 6=Sat)
+  // Use numeric weekday: Sunday=0 ... Saturday=6
+  const localDayNum = parseInt(
+    new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'long' }).format(now) === 'Sunday'    ? '0' :
+    new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'long' }).format(now) === 'Monday'    ? '1' :
+    new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'long' }).format(now) === 'Tuesday'   ? '2' :
+    new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'long' }).format(now) === 'Wednesday' ? '3' :
+    new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'long' }).format(now) === 'Thursday'  ? '4' :
+    new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'long' }).format(now) === 'Friday'    ? '5' : '6'
+  )
+  // Schema: 1=Mon ... 7=Sun
+  const dayOfWeek = localDayNum === 0 ? 7 : localDayNum
+
+  const [weightsRes, checkinRes, activeProgramRes, habitsRes, habitLogsRes, entriesRes] = await Promise.all([
     supabase.from('body_metrics')
       .select('weight_kg, logged_at')
       .eq('user_id', user.id)
@@ -37,7 +47,6 @@ export default async function DashboardPage() {
       .order('created_at', { ascending: false })
       .limit(1),
 
-    // Fetch sessions separately to guarantee ordering
     supabase.from('programs')
       .select('id, name')
       .eq('user_id', user.id)
@@ -55,32 +64,43 @@ export default async function DashboardPage() {
       .select('habit_id, count')
       .eq('user_id', user.id)
       .eq('logged_date', today),
+
+    // Food entries for today in user's timezone using date cast
+    supabase.from('food_entries')
+      .select('calories_total, protein_total, carbs_total, fat_total, logged_at')
+      .eq('user_id', user.id),
   ])
 
-  // Sum today's nutrition from food_entries directly
-  const entries = entriesRes.data || []
-  const todayNutrition = entries.length > 0 ? {
-    total_calories:          entries.reduce((s, e) => s + (e.calories_total || 0), 0),
-    protein_g:               entries.reduce((s, e) => s + (e.protein_total || 0), 0),
-    carbs_g:                 entries.reduce((s, e) => s + (e.carbs_total   || 0), 0),
-    fat_g:                   entries.reduce((s, e) => s + (e.fat_total     || 0), 0),
+  // Filter entries client-side by user's local date to avoid timezone DB issues
+  const allEntries = entriesRes.data || []
+  const todayEntries = allEntries.filter(e => {
+    if (!e.logged_at) return false
+    const entryDate = new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(new Date(e.logged_at))
+    return entryDate === today
+  })
+
+  const todayNutrition = todayEntries.length > 0 ? {
+    total_calories:          Math.round(todayEntries.reduce((s, e) => s + (e.calories_total || 0), 0)),
+    protein_g:               Math.round(todayEntries.reduce((s, e) => s + (e.protein_total || 0), 0) * 10) / 10,
+    carbs_g:                 Math.round(todayEntries.reduce((s, e) => s + (e.carbs_total   || 0), 0) * 10) / 10,
+    fat_g:                   Math.round(todayEntries.reduce((s, e) => s + (e.fat_total     || 0), 0) * 10) / 10,
     workout_calories_burned: 0,
   } : null
 
-  // Fetch today's session separately with explicit ordering
+  // Fetch today's session
   let todaySession: any = null
   const activeProgram = activeProgramRes.data
 
   if (activeProgram) {
-    // Get week 1 for this program
     const { data: weeks } = await supabase
       .from('program_weeks')
-      .select('id')
+      .select('id, week_number')
       .eq('program_id', activeProgram.id)
       .order('week_number', { ascending: true })
       .limit(1)
 
-    if (weeks && weeks.length > 0) {
+    const weekId = weeks?.[0]?.id
+    if (weekId) {
       const { data: sessions } = await supabase
         .from('sessions')
         .select(`
@@ -90,7 +110,7 @@ export default async function DashboardPage() {
             exercise:exercises ( id, name, muscle_group, gif_url )
           )
         `)
-        .eq('program_week_id', weeks[0].id)
+        .eq('program_week_id', weekId)
         .eq('day_of_week', dayOfWeek)
         .limit(1)
 
@@ -117,14 +137,16 @@ export default async function DashboardPage() {
 
   return (
     <DashboardClient
-      profile={profileRes.data as any}
+      profile={profile as any}
       emailConfirmed={!!user.email_confirmed_at}
       todayNutrition={todayNutrition as any}
       recentWeights={(weightsRes.data || []) as any}
       latestCheckin={(checkinRes.data?.[0] ?? null) as any}
       activeProgram={activeProgram ?? null}
-      todaySession={todaySession as any}
+      todaySession={todaySession}
       habits={habitsWithStatus}
+      timezone={tz}
+      today={today}
     />
   )
 }

@@ -25,6 +25,7 @@ interface Props {
     sex: string
     activity_level: string
     target_weight_kg: number | null
+    timezone: string | null
   } | null
 }
 
@@ -67,6 +68,9 @@ export default function AccountClient({ email, emailConfirmed, profile }: Props)
     : '')
   const [goalSaving,  setGoalSaving]  = useState(false)
   const [goalSaved,   setGoalSaved]   = useState(false)
+  const [tz,          setTz]          = useState(profile?.timezone || 'UTC')
+  const [tzSaving,    setTzSaving]    = useState(false)
+  const [tzSaved,     setTzSaved]     = useState(false)
 
   async function handleThemeChange(t: Theme) {
     setThemeState(t)
@@ -97,6 +101,19 @@ export default function AccountClient({ email, emailConfirmed, profile }: Props)
     setGoalSaving(false)
     setGoalSaved(true)
     setTimeout(() => setGoalSaved(false), 2000)
+  }
+
+  async function handleSaveTimezone() {
+    setTzSaving(true)
+    await fetch('/api/user/profile', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ timezone: tz }),
+    })
+    setTzSaving(false)
+    setTzSaved(true)
+    setTimeout(() => setTzSaved(false), 2000)
   }
 
   async function handlePasswordChange(e: React.FormEvent) {
@@ -174,6 +191,30 @@ export default function AccountClient({ email, emailConfirmed, profile }: Props)
             </button>
           ))}
         </div>
+      </div>
+
+      {/* Timezone */}
+      <div style={S.section}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+          <p style={{ ...S.sectionLabel, marginBottom: 0 }}>Timezone</p>
+          {tzSaved && <span style={{ fontSize: 10, color: 'var(--green)' }}>Saved</span>}
+        </div>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <input
+            type="text"
+            value={tz}
+            onChange={e => setTz(e.target.value)}
+            placeholder="e.g. America/Los_Angeles"
+            className="input"
+            style={{ flex: 1, fontSize: 12 }}
+          />
+          <button onClick={handleSaveTimezone} disabled={tzSaving} className="btn" style={{ fontSize: 12, padding: '10px 16px', whiteSpace: 'nowrap' }}>
+            {tzSaving ? 'Saving...' : 'Save'}
+          </button>
+        </div>
+        <p style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 8 }}>
+          Detected: {typeof window !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : tz}
+        </p>
       </div>
 
       {/* Computed targets */}

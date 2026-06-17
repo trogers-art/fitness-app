@@ -4,6 +4,7 @@ import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceL
 import type { UserProfile, DailyNutritionSummary, BodyMetric } from '@/lib/types'
 import { computeRollingAverage } from '@/lib/utils/metrics'
 import Link from 'next/link'
+import TimezoneSync from './TimezoneSync'
 
 interface SessionExercise {
   id: string; order_index: number; target_sets: number
@@ -30,6 +31,8 @@ interface Props {
   activeProgram: { id: string; name: string } | null
   todaySession: TodaySession | null
   habits: HabitStatus[]
+  timezone: string
+  today: string
 }
 
 const kgToLbs = (kg: number) => Math.round(kg * 2.20462 * 10) / 10
@@ -71,6 +74,7 @@ function MacroBar({ label, eaten, target, color }: { label: string; eaten: numbe
 export default function DashboardClient({
   profile, emailConfirmed, todayNutrition, recentWeights,
   latestCheckin, activeProgram, todaySession, habits,
+  timezone, today,
 }: Props) {
   if (!profile) return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '80px 0', gap: 16 }}>
@@ -100,6 +104,7 @@ export default function DashboardClient({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <TimezoneSync savedTimezone={timezone} />
 
       {/* Email banner */}
       {!emailConfirmed && (
@@ -111,7 +116,7 @@ export default function DashboardClient({
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between' }}>
         <div>
-          <p style={{ ...L.label, marginBottom: 4 }}>{new Date().toLocaleDateString('en', { weekday: 'long', month: 'long', day: 'numeric' })}</p>
+          <p style={{ ...L.label, marginBottom: 4 }}>{new Date(today + 'T12:00:00').toLocaleDateString('en', { weekday: 'long', month: 'long', day: 'numeric', timeZone: timezone })}</p>
           <h1 style={{ fontSize: 22, fontWeight: 600, color: 'var(--page-title)', margin: 0 }}>Dashboard</h1>
         </div>
         <Link href="/food" className="btn" style={{ fontSize: 12, padding: '7px 13px' }}>+ Log food</Link>
