@@ -13,14 +13,17 @@ export default async function DashboardPage() {
   const jsDay = new Date().getDay()
   const dayOfWeek = jsDay === 0 ? 7 : jsDay
 
-  const [profileRes, nutritionRes, weightsRes, checkinRes, activeProgramRes, habitsRes, habitLogsRes] = await Promise.all([
+  const [profileRes, entriesRes, weightsRes, checkinRes, activeProgramRes, habitsRes, habitLogsRes] = await Promise.all([
     supabase.from('user_profiles')
       .select('daily_calories, protein_g, carbs_g, fat_g, units, goal')
       .eq('user_id', user.id).single(),
 
-    supabase.from('daily_nutrition_summaries')
-      .select('total_calories, protein_g, carbs_g, fat_g, workout_calories_burned')
-      .eq('user_id', user.id).eq('date', today).single(),
+    // Query food_entries directly — always fresh, no sync dependency
+    supabase.from('food_entries')
+      .select('calories_total, protein_total, carbs_total, fat_total')
+      .eq('user_id', user.id)
+      .gte('logged_at', `${today}T00:00:00.000Z`)
+      .lte('logged_at', `${today}T23:59:59.999Z`),
 
     supabase.from('body_metrics')
       .select('weight_kg, logged_at')
@@ -34,19 +37,9 @@ export default async function DashboardPage() {
       .order('created_at', { ascending: false })
       .limit(1),
 
+    // Fetch sessions separately to guarantee ordering
     supabase.from('programs')
-      .select(`
-        id, name,
-        program_weeks (
-          sessions (
-            id, day_of_week, focus,
-            session_exercises (
-              id, order_index, target_sets, target_reps, rest_seconds,
-              exercise:exercises ( id, name, muscle_group, gif_url )
-            )
-          )
-        )
-      `)
+      .select('id, name')
       .eq('user_id', user.id)
       .eq('active', true)
       .single(),
@@ -64,10 +57,46 @@ export default async function DashboardPage() {
       .eq('logged_date', today),
   ])
 
+  // Sum today's nutrition from food_entries directly
+  const entries = entriesRes.data || []
+  const todayNutrition = entries.length > 0 ? {
+    total_calories:          entries.reduce((s, e) => s + (e.calories_total || 0), 0),
+    protein_g:               entries.reduce((s, e) => s + (e.protein_total || 0), 0),
+    carbs_g:                 entries.reduce((s, e) => s + (e.carbs_total   || 0), 0),
+    fat_g:                   entries.reduce((s, e) => s + (e.fat_total     || 0), 0),
+    workout_calories_burned: 0,
+  } : null
+
+  // Fetch today's session separately with explicit ordering
+  let todaySession: any = null
   const activeProgram = activeProgramRes.data
-  // Use only week 1 to avoid duplicate sessions from multiple program_weeks
-  const week1Sessions = activeProgram?.program_weeks?.[0]?.sessions ?? []
-  const todaySession  = week1Sessions.find((s: any) => s.day_of_week === dayOfWeek) ?? null
+
+  if (activeProgram) {
+    // Get week 1 for this program
+    const { data: weeks } = await supabase
+      .from('program_weeks')
+      .select('id')
+      .eq('program_id', activeProgram.id)
+      .order('week_number', { ascending: true })
+      .limit(1)
+
+    if (weeks && weeks.length > 0) {
+      const { data: sessions } = await supabase
+        .from('sessions')
+        .select(`
+          id, day_of_week, focus,
+          session_exercises (
+            id, order_index, target_sets, target_reps, rest_seconds,
+            exercise:exercises ( id, name, muscle_group, gif_url )
+          )
+        `)
+        .eq('program_week_id', weeks[0].id)
+        .eq('day_of_week', dayOfWeek)
+        .limit(1)
+
+      todaySession = sessions?.[0] ?? null
+    }
+  }
 
   // Build today's habit completion map
   const habits   = habitsRes.data || []
@@ -90,10 +119,10 @@ export default async function DashboardPage() {
     <DashboardClient
       profile={profileRes.data as any}
       emailConfirmed={!!user.email_confirmed_at}
-      todayNutrition={nutritionRes.data as any}
+      todayNutrition={todayNutrition as any}
       recentWeights={(weightsRes.data || []) as any}
       latestCheckin={(checkinRes.data?.[0] ?? null) as any}
-      activeProgram={activeProgram ? { id: activeProgram.id, name: activeProgram.name } : null}
+      activeProgram={activeProgram ?? null}
       todaySession={todaySession as any}
       habits={habitsWithStatus}
     />
