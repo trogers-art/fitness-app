@@ -11,7 +11,6 @@ const EntrySchema = z.object({
   protein_total:       z.number().optional(),
   carbs_total:         z.number().optional(),
   fat_total:           z.number().optional(),
-  // Inline food creation
   create_food: z.object({
     name:              z.string().min(1),
     calories_per_100g: z.number().min(0),
@@ -20,7 +19,6 @@ const EntrySchema = z.object({
     fat_per_100g:      z.number().min(0),
     source:            z.literal('custom'),
   }).optional(),
-  // Inline food data when no food_id available (from FatSecret serving)
   food_name:           z.string().optional(),
   food_brand:          z.string().nullable().optional(),
   calories_per_100g:   z.number().optional(),
@@ -50,7 +48,8 @@ export async function POST(request: NextRequest) {
     logged_at,
   } = parsed.data
 
-  let resolvedFoodId = food_id
+  let resolvedFoodId  = food_id
+  let resolvedFoodName = food_name || create_food?.name
 
   // Case 1: explicit create_food payload
   if (create_food && !resolvedFoodId) {
@@ -59,12 +58,12 @@ export async function POST(request: NextRequest) {
       .insert({ ...create_food, user_id: user.id })
       .select('id').single()
     if (error || !newFood) return NextResponse.json({ error: 'Failed to create food' }, { status: 500 })
-    resolvedFoodId = newFood.id
+    resolvedFoodId   = newFood.id
+    resolvedFoodName = create_food.name
   }
 
   // Case 2: food data provided inline (from FatSecret serving picker, no DB id yet)
   if (!resolvedFoodId && food_name && calories_per_100g != null) {
-    // Try to find existing food by name first
     const { data: existing } = await supabase
       .from('foods')
       .select('id')
@@ -76,7 +75,6 @@ export async function POST(request: NextRequest) {
     if (existing) {
       resolvedFoodId = existing.id
     } else {
-      // Create it
       const { data: newFood, error } = await supabase
         .from('foods')
         .insert({
@@ -119,5 +117,92 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Failed to log entry' }, { status: 500 })
   }
 
+  // ── Upsert recent_foods ─────────────────────────────────────────────────
+  // Store full re-log payload so one tap can re-log with same serving
+  if (resolvedFoodName) {
+    const relogPayload = {
+      food_id:             resolvedFoodId,
+      meal_type,
+      quantity_g,
+      serving_description: serving_description || null,
+      calories_total:      calories_total      || null,
+      protein_total:       protein_total       || null,
+      carbs_total:         carbs_total         || null,
+      fat_total:           fat_total           || null,
+      food_name,
+      food_brand:          food_brand          || null,
+      calories_per_100g:   calories_per_100g   || null,
+      protein_per_100g:    protein_per_100g    || null,
+      carbs_per_100g:      carbs_per_100g      || null,
+      fat_per_100g:        fat_per_100g        || null,
+    }
+
+    // Try update first (increment use_count), insert if not exists
+    const { data: rfUpdated, error: rfUpdateErr } = await supabase
+      .from('recent_foods')
+      .update({
+        serving_desc: serving_description || null,
+        calories:     calories_total      || null,
+        protein_g:    protein_total       || null,
+        carbs_g:      carbs_total         || null,
+        fat_g:        fat_total           || null,
+        quantity_g,
+        meal_type,
+        food_data:    relogPayload,
+        last_used_at: new Date().toISOString(),
+      })
+      .eq('user_id', user.id)
+      .eq('food_name', resolvedFoodName)
+      .select('id')
+
+    if (!rfUpdateErr && (!rfUpdated || rfUpdated.length === 0)) {
+      // Row didn't exist — insert fresh
+      const { error: rfInsertErr } = await supabase
+        .from('recent_foods')
+        .insert({
+          user_id:      user.id,
+          food_name:    resolvedFoodName,
+          food_brand:   food_brand   || null,
+          serving_desc: serving_description || null,
+          calories:     calories_total      || null,
+          protein_g:    protein_total       || null,
+          carbs_g:      carbs_total         || null,
+          fat_g:        fat_total           || null,
+          quantity_g,
+          meal_type,
+          food_data:    relogPayload,
+          use_count:    1,
+          last_used_at: new Date().toISOString(),
+        })
+      if (rfInsertErr) console.warn('[entries] recent_foods insert failed:', rfInsertErr.message)
+    } else if (rfUpdateErr) {
+      console.warn('[entries] recent_foods update failed:', rfUpdateErr.message)
+    }
+  }
+
   return NextResponse.json({ entry })
+}
+
+export async function GET(request: NextRequest) {
+  const supabase = createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const date = request.nextUrl.searchParams.get('date')
+  if (!date) return NextResponse.json({ error: 'date required' }, { status: 400 })
+
+  const { data, error } = await supabase
+    .from('food_entries')
+    .select(`
+      id, meal_type, quantity_g, serving_description,
+      calories_total, protein_total, carbs_total, fat_total, logged_at,
+      food:foods ( id, name, brand, calories_per_100g, protein_per_100g, carbs_per_100g, fat_per_100g )
+    `)
+    .eq('user_id', user.id)
+    .gte('logged_at', `${date}T00:00:00`)
+    .lte('logged_at', `${date}T23:59:59`)
+    .order('logged_at')
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  return NextResponse.json({ entries: data || [] })
 }
