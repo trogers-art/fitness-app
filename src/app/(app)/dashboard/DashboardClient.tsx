@@ -139,12 +139,11 @@ export default function DashboardClient({
           </div>
         </div>
       ) : (
-        <div style={emptyCard}>
+        <div style={{ ...emptyCard, justifyContent: 'flex-start', gap: 0 }}>
           <div>
             <p style={{ ...L.label, marginBottom: 4 }}>Calories</p>
-            <p style={{ fontSize: 13, color: 'var(--text-2)', margin: 0 }}>Nothing logged today</p>
+            <p style={{ fontSize: 13, color: 'var(--text-2)', margin: 0 }}>Nothing logged today — use <strong>+ Log food</strong> above</p>
           </div>
-          <Link href="/food" className="btn" style={{ fontSize: 11, padding: '6px 12px', whiteSpace: 'nowrap' }}>Log food</Link>
         </div>
       )}
 

@@ -2,6 +2,8 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import DashboardClient from './DashboardClient'
 
+export const dynamic = 'force-dynamic'
+
 export default async function DashboardPage() {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -63,8 +65,9 @@ export default async function DashboardPage() {
   ])
 
   const activeProgram = activeProgramRes.data
-  const allSessions   = activeProgram?.program_weeks?.flatMap((w: any) => w.sessions) ?? []
-  const todaySession  = allSessions.find((s: any) => s.day_of_week === dayOfWeek) ?? null
+  // Use only week 1 to avoid duplicate sessions from multiple program_weeks
+  const week1Sessions = activeProgram?.program_weeks?.[0]?.sessions ?? []
+  const todaySession  = week1Sessions.find((s: any) => s.day_of_week === dayOfWeek) ?? null
 
   // Build today's habit completion map
   const habits   = habitsRes.data || []
@@ -91,7 +94,7 @@ export default async function DashboardPage() {
       recentWeights={(weightsRes.data || []) as any}
       latestCheckin={(checkinRes.data?.[0] ?? null) as any}
       activeProgram={activeProgram ? { id: activeProgram.id, name: activeProgram.name } : null}
-      todaySession={todaySession}
+      todaySession={todaySession as any}
       habits={habitsWithStatus}
     />
   )
