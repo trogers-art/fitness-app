@@ -34,7 +34,7 @@ export default async function DashboardPage() {
   // Schema: 1=Mon ... 7=Sun
   const dayOfWeek = localDayNum === 0 ? 7 : localDayNum
 
-  const [weightsRes, checkinRes, activeProgramRes, habitsRes, habitLogsRes, entriesRes] = await Promise.all([
+  const [weightsRes, checkinRes, activeProgramRes, habitsRes, habitLogsRes, entriesRes, workoutLogsRes] = await Promise.all([
     supabase.from('body_metrics')
       .select('weight_kg, logged_at')
       .eq('user_id', user.id)
@@ -69,6 +69,11 @@ export default async function DashboardPage() {
     supabase.from('food_entries')
       .select('calories_total, protein_total, carbs_total, fat_total, logged_at')
       .eq('user_id', user.id),
+
+    // Today's workout calorie burn
+    supabase.from('workout_logs')
+      .select('calories_burned_est, started_at')
+      .eq('user_id', user.id),
   ])
 
   // Filter entries client-side by user's local date to avoid timezone DB issues
@@ -79,12 +84,22 @@ export default async function DashboardPage() {
     return entryDate === today
   })
 
-  const todayNutrition = todayEntries.length > 0 ? {
+  // Sum today's workout calorie burn (filtered by user's local date)
+  const allWorkoutLogs = workoutLogsRes.data || []
+  const todayBurned = allWorkoutLogs
+    .filter(w => {
+      if (!w.started_at) return false
+      const logDate = new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(new Date(w.started_at))
+      return logDate === today
+    })
+    .reduce((s, w) => s + (w.calories_burned_est || 0), 0)
+
+  const todayNutrition = (todayEntries.length > 0 || todayBurned > 0) ? {
     total_calories:          Math.round(todayEntries.reduce((s, e) => s + (e.calories_total || 0), 0)),
     protein_g:               Math.round(todayEntries.reduce((s, e) => s + (e.protein_total || 0), 0) * 10) / 10,
     carbs_g:                 Math.round(todayEntries.reduce((s, e) => s + (e.carbs_total   || 0), 0) * 10) / 10,
     fat_g:                   Math.round(todayEntries.reduce((s, e) => s + (e.fat_total     || 0), 0) * 10) / 10,
-    workout_calories_burned: 0,
+    workout_calories_burned: todayBurned,
   } : null
 
   // Fetch today's session

@@ -59,6 +59,30 @@ export async function POST(request: NextRequest) {
 
   const { sets, program_id, session_id, name, started_at, finished_at, duration_seconds, notes } = parsed.data
 
+  // ── Estimate calories burned using METs formula ──────────────────────────
+  // calories = METs × weight(kg) × duration(hours)
+  // METs scale with intensity: more sets completed per minute = higher intensity
+  const { data: profile } = await supabase
+    .from('user_profiles')
+    .select('weight_kg')
+    .eq('user_id', user.id)
+    .single()
+
+  const weightKg     = profile?.weight_kg || 80 // sensible fallback if profile missing
+  const durationHours = duration_seconds / 3600
+  const completedSets = sets.filter(s => s.completed).length
+  const setsPerMinute = duration_seconds > 0 ? completedSets / (duration_seconds / 60) : 0
+
+  // Resistance training METs: ACSM ranges from ~3.5 (light) to ~6.0 (vigorous)
+  let mets = 3.5
+  if (setsPerMinute >= 0.5) mets = 6.0       // vigorous — high density, minimal rest
+  else if (setsPerMinute >= 0.3) mets = 5.0  // moderate-vigorous
+  else if (setsPerMinute >= 0.15) mets = 4.0 // moderate
+
+  const caloriesBurned = durationHours > 0
+    ? Math.round(mets * weightKg * durationHours)
+    : 0
+
   const { data: log, error } = await supabase
     .from('workout_logs')
     .insert({
@@ -71,7 +95,7 @@ export async function POST(request: NextRequest) {
       duration_seconds,
       duration_minutes:    Math.round(duration_seconds / 60),
       notes:               notes || null,
-      calories_burned_est: null,
+      calories_burned_est: caloriesBurned,
     })
     .select('id').single()
 
