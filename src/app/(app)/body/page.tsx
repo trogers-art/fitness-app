@@ -9,36 +9,33 @@ export default async function BodyPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  console.log('[body-page] user.id:', user.id)
-
-  const { data: profile, error: profileError } = await supabase
+  const { data: profile } = await supabase
     .from('user_profiles')
     .select('units, goal, weight_kg, target_weight_kg, daily_calories')
     .eq('user_id', user.id)
     .single()
 
-  if (profileError) console.error('[body-page] profile error:', profileError)
-
   // Last 90 days of metrics
   const since = new Date()
   since.setDate(since.getDate() - 90)
 
-  console.log('[body-page] since:', since.toISOString())
-
-  const { data: metrics, error: metricsError } = await supabase
+  const { data: metrics } = await supabase
     .from('body_metrics')
-    .select('id, weight_kg, waist_cm, hips_cm, chest_cm, arms_cm, thighs_cm, logged_at, notes')
+    .select('id, weight_kg, waist_cm, hips_cm, chest_cm, arms_cm, thighs_cm, logged_at, note')
     .eq('user_id', user.id)
     .gte('logged_at', since.toISOString())
     .order('logged_at', { ascending: false })
 
-  console.log('[body-page] metrics count:', metrics?.length ?? 0)
-  if (metricsError) console.error('[body-page] metrics error:', metricsError)
+  // Map DB column "note" to the "notes" field BodyClient expects
+  const mappedMetrics = (metrics || []).map(m => ({
+    ...m,
+    notes: m.note,
+  }))
 
   return (
     <BodyClient
       profile={profile}
-      initialMetrics={metrics || []}
+      initialMetrics={mappedMetrics}
     />
   )
 }
