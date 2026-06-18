@@ -3,12 +3,15 @@ import { createClient } from '@/lib/supabase/server'
 import { z } from 'zod'
 
 const SetSchema = z.object({
-  exercise_id:   z.string().uuid(),
-  exercise_name: z.string(),
-  set_number:    z.number().int().min(1),
-  weight_kg:     z.number().min(0).optional(),
-  reps:          z.number().int().min(0).optional(),
-  completed:     z.boolean().default(true),
+  exercise_id:         z.string().uuid(),
+  exercise_name:       z.string(),
+  set_number:          z.number().int().min(1),
+  weight_kg:           z.number().min(0).optional(),
+  reps:                z.number().int().min(0).optional(),
+  completed:           z.boolean().default(true),
+  logged_at:           z.string().optional(),
+  rest_target_seconds: z.number().int().min(0).optional(),
+  rest_actual_seconds: z.number().int().min(0).nullable().optional(),
 })
 
 const LogSchema = z.object({
@@ -30,8 +33,8 @@ export async function GET() {
   const { data: logs, error } = await supabase
     .from('workout_logs')
     .select(`
-      id, name, started_at, completed_at, duration_seconds, duration_minutes, program_id, session_id, notes,
-      workout_log_sets ( id, exercise_name, set_number, weight_kg, reps, completed )
+      id, name, started_at, completed_at, duration_seconds, duration_minutes, program_id, session_id, notes, calories_burned_est,
+      workout_log_sets ( id, exercise_name, set_number, weight_kg, reps, completed, logged_at )
     `)
     .eq('user_id', user.id)
     .order('started_at', { ascending: false, nullsFirst: false })
@@ -59,28 +62,67 @@ export async function POST(request: NextRequest) {
 
   const { sets, program_id, session_id, name, started_at, finished_at, duration_seconds, notes } = parsed.data
 
-  // ── Estimate calories burned using METs formula ──────────────────────────
-  // calories = METs × weight(kg) × duration(hours)
-  // METs scale with intensity: more sets completed per minute = higher intensity
+  // ── Estimate calories burned using METs + actual training volume ─────────
+  // Base: calories = METs × weight(kg) × duration(hours)
+  // METs tier is driven by volume density (kg moved per minute) AND actual rest
+  // taken between sets — shorter real rest = higher work density = higher METs,
+  // even if two sessions have similar total duration.
   const { data: profile } = await supabase
     .from('user_profiles')
     .select('weight_kg')
     .eq('user_id', user.id)
     .single()
 
-  const weightKg     = profile?.weight_kg || 80 // sensible fallback if profile missing
+  const bodyWeightKg  = profile?.weight_kg || 80
   const durationHours = duration_seconds / 3600
-  const completedSets = sets.filter(s => s.completed).length
-  const setsPerMinute = duration_seconds > 0 ? completedSets / (duration_seconds / 60) : 0
+  const durationMin   = duration_seconds / 60
 
-  // Resistance training METs: ACSM ranges from ~3.5 (light) to ~6.0 (vigorous)
+  const completedSets = sets.filter(s => s.completed)
+
+  // Total volume = sum of (weight_kg × reps) across all completed sets.
+  // Bodyweight-only sets use bodyweight as the effective load.
+  const totalVolumeKg = completedSets.reduce((sum, s) => {
+    const load = s.weight_kg && s.weight_kg > 0 ? s.weight_kg : bodyWeightKg
+    const reps = s.reps || 0
+    return sum + (load * reps)
+  }, 0)
+
+  const volumePerMinute = durationMin > 0 ? totalVolumeKg / durationMin : 0
+
+  // Average actual rest taken between sets (excludes first set of session, which has no prior rest)
+  const restSamples = completedSets
+    .map(s => s.rest_actual_seconds)
+    .filter((r): r is number => r !== null && r !== undefined)
+
+  const avgActualRest = restSamples.length > 0
+    ? restSamples.reduce((a, b) => a + b, 0) / restSamples.length
+    : null
+
+  // Average target rest, for comparison
+  const targetRests = completedSets
+    .map(s => s.rest_target_seconds)
+    .filter((r): r is number => r !== undefined)
+  const avgTargetRest = targetRests.length > 0
+    ? targetRests.reduce((a, b) => a + b, 0) / targetRests.length
+    : null
+
+  // Rest compliance ratio — below 1.0 means resting less than prescribed (higher density)
+  const restRatio = (avgActualRest !== null && avgTargetRest && avgTargetRest > 0)
+    ? avgActualRest / avgTargetRest
+    : 1.0
+
+  // METs tiers from volume density, then nudged up if actual rest ran shorter than prescribed
   let mets = 3.5
-  if (setsPerMinute >= 0.5) mets = 6.0       // vigorous — high density, minimal rest
-  else if (setsPerMinute >= 0.3) mets = 5.0  // moderate-vigorous
-  else if (setsPerMinute >= 0.15) mets = 4.0 // moderate
+  if (volumePerMinute >= 250)      mets = 6.0
+  else if (volumePerMinute >= 120) mets = 5.0
+  else if (volumePerMinute >= 50)  mets = 4.0
+
+  // Resting noticeably less than prescribed bumps intensity up to the next half-tier,
+  // capped at 6.5 (vigorous resistance training ceiling per ACSM)
+  if (restRatio < 0.7) mets = Math.min(mets + 0.5, 6.5)
 
   const caloriesBurned = durationHours > 0
-    ? Math.round(mets * weightKg * durationHours)
+    ? Math.round(mets * bodyWeightKg * durationHours)
     : 0
 
   const { data: log, error } = await supabase
@@ -114,7 +156,7 @@ export async function POST(request: NextRequest) {
         weight_kg:      s.weight_kg ?? null,
         reps:           s.reps ?? null,
         completed:      s.completed,
-        logged_at:      new Date().toISOString(),
+        logged_at:      s.logged_at || new Date().toISOString(),
       }))
     )
     if (setsError) {
@@ -123,5 +165,5 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  return NextResponse.json({ log_id: log.id })
+  return NextResponse.json({ log_id: log.id, calories_burned_est: caloriesBurned })
 }
