@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts'
+import EditMetricModal from './EditMetricModal'
 
 type Tab = 'log' | 'history'
 
@@ -78,6 +79,7 @@ export default function BodyClient({ profile, initialMetrics }: Props) {
   const [saved,         setSaved]         = useState(false)
   const [showMeasures,  setShowMeasures]  = useState(false)
   const [deleting,      setDeleting]      = useState<string | null>(null)
+  const [editingMetric, setEditingMetric] = useState<Metric | null>(null)
 
   // Form state
   const [weight,   setWeight]  = useState('')
@@ -177,11 +179,15 @@ export default function BodyClient({ profile, initialMetrics }: Props) {
     if (chest)  entry.chest_cm  = toCm(parseFloat(chest),  imperial)
     if (arms)   entry.arms_cm   = toCm(parseFloat(arms),   imperial)
     if (thighs) entry.thighs_cm = toCm(parseFloat(thighs), imperial)
-    if (notes)  entry.notes     = notes
+    // DB column is "note" (singular), not "notes" — map on the way in
+    if (notes)  entry.note      = notes
 
-    const { data } = await supabase.from('body_metrics').insert(entry).select('*').single()
+    const { data, error } = await supabase.from('body_metrics').insert(entry).select('*').single()
+    if (error) console.error('[body] save error:', error)
     if (data) {
-      setMetrics(prev => [data, ...prev])
+      // Map DB "note" back to "notes" for local state consistency
+      const mapped = { ...data, notes: data.note }
+      setMetrics(prev => [mapped, ...prev])
       setSaved(true)
       setWeight(''); setWaist(''); setHips(''); setChest(''); setArms(''); setThighs(''); setNotes('')
       setTimeout(() => setSaved(false), 2000)
@@ -386,7 +392,12 @@ export default function BodyClient({ profile, initialMetrics }: Props) {
               : null
             const hasMeasures = m.waist_cm || m.hips_cm || m.chest_cm || m.arms_cm
             return (
-              <div key={m.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '11px 16px', borderBottom: i < sorted.length - 1 ? '1px solid var(--border)' : 'none' }}>
+              <div key={m.id}
+                onClick={() => setEditingMetric(m)}
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '11px 16px', borderBottom: i < sorted.length - 1 ? '1px solid var(--border)' : 'none', cursor: 'pointer' }}
+                onMouseEnter={e => (e.currentTarget.style.background = 'var(--surface-2)')}
+                onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+              >
                 <div style={{ flex: 1 }}>
                   <p style={{ fontSize: 13, fontWeight: 500, color: 'var(--text)', margin: 0 }}>
                     {new Date(m.logged_at).toLocaleDateString('en', { weekday: 'short', month: 'short', day: 'numeric' })}
@@ -412,7 +423,7 @@ export default function BodyClient({ profile, initialMetrics }: Props) {
                     </p>
                   )}
                 </div>
-                <button onClick={() => handleDelete(m.id)} disabled={deleting === m.id}
+                <button onClick={e => { e.stopPropagation(); handleDelete(m.id) }} disabled={deleting === m.id}
                   style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-3)', padding: 4, opacity: deleting === m.id ? 0.4 : 1 }}
                   onMouseEnter={e => (e.currentTarget.style.color = 'var(--red)')}
                   onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-3)')}>
@@ -424,6 +435,18 @@ export default function BodyClient({ profile, initialMetrics }: Props) {
             )
           })}
         </div>
+      )}
+
+      {editingMetric && (
+        <EditMetricModal
+          metric={editingMetric}
+          imperial={imperial}
+          onClose={() => setEditingMetric(null)}
+          onSaved={updated => {
+            setMetrics(prev => prev.map(m => m.id === updated.id ? updated : m))
+            setEditingMetric(null)
+          }}
+        />
       )}
     </div>
   )
