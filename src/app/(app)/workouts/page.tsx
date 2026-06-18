@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useSearchParams } from 'next/navigation'
 import ActiveSession from './ActiveSession'
 import { ExerciseDetailModal } from './ExerciseDetailModal'
+import WorkoutLogDetailModal from './WorkoutLogDetailModal'
 
 interface Exercise {
   id: string; name: string; muscle_group: string
@@ -25,9 +26,14 @@ interface Program {
   program_weeks: { id: string; week_number: number; sessions: Session[] }[]
 }
 interface WorkoutLog {
-  id: string; name: string; started_at: string
-  duration_seconds: number
-  workout_log_sets: { exercise_name: string; set_number: number; weight_kg: number | null; reps: number | null }[]
+  id: string; name: string; started_at: string; completed_at: string | null
+  duration_seconds: number; calories_burned_est: number | null; notes: string | null
+  workout_log_sets: {
+    id: string; exercise_name: string; set_number: number
+    weight_kg: number | null; reps: number | null; completed: boolean
+    logged_at: string | null
+    rest_target_seconds: number | null; rest_actual_seconds: number | null
+  }[]
 }
 
 const DAYS_SHORT = ['','Mon','Tue','Wed','Thu','Fri','Sat','Sun']
@@ -477,6 +483,8 @@ function ProgramDetail({ program, onBack, onDeleted, onStartSession, onRefresh }
 // ── History ────────────────────────────────────────────────────────────────
 
 function History({ logs }: { logs: WorkoutLog[] }) {
+  const [selectedLog, setSelectedLog] = useState<WorkoutLog | null>(null)
+
   if (logs.length === 0) return (
     <p style={{ ...S.lbl, textAlign: 'center', padding: '32px 0' }}>No sessions logged yet.</p>
   )
@@ -484,10 +492,16 @@ function History({ logs }: { logs: WorkoutLog[] }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       {logs.map(log => {
         const exercises = [...new Set(log.workout_log_sets.map(s => s.exercise_name))]
-        const totalSets = log.workout_log_sets.length
+        const totalSets = log.workout_log_sets.filter(s => s.completed).length
         const mins = Math.round((log.duration_seconds || 0) / 60)
         return (
-          <div key={log.id} style={{ ...S.card }}>
+          <button
+            key={log.id}
+            onClick={() => setSelectedLog(log)}
+            style={{ ...S.card, textAlign: 'left', border: '1px solid var(--border)', cursor: 'pointer', width: '100%', display: 'block', fontFamily: 'DM Sans, sans-serif' }}
+            onMouseEnter={e => (e.currentTarget.style.background = 'var(--surface-2)')}
+            onMouseLeave={e => (e.currentTarget.style.background = 'var(--surface)')}
+          >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
               <div>
                 <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', margin: 0 }}>{log.name}</p>
@@ -503,9 +517,13 @@ function History({ logs }: { logs: WorkoutLog[] }) {
             <p style={{ fontSize: 11, color: 'var(--text-3)', margin: 0 }}>
               {exercises.slice(0, 4).join(', ')}{exercises.length > 4 ? ` +${exercises.length - 4} more` : ''}
             </p>
-          </div>
+          </button>
         )
       })}
+
+      {selectedLog && (
+        <WorkoutLogDetailModal log={selectedLog} onClose={() => setSelectedLog(null)} />
+      )}
     </div>
   )
 }

@@ -34,7 +34,7 @@ export async function GET() {
     .from('workout_logs')
     .select(`
       id, name, started_at, completed_at, duration_seconds, duration_minutes, program_id, session_id, notes, calories_burned_est,
-      workout_log_sets ( id, exercise_name, set_number, weight_kg, reps, completed, logged_at )
+      workout_log_sets ( id, exercise_name, set_number, weight_kg, reps, completed, logged_at, rest_target_seconds, rest_actual_seconds )
     `)
     .eq('user_id', user.id)
     .order('started_at', { ascending: false, nullsFirst: false })
@@ -149,14 +149,16 @@ export async function POST(request: NextRequest) {
   if (sets.length > 0) {
     const { error: setsError } = await supabase.from('workout_log_sets').insert(
       sets.map(s => ({
-        workout_log_id: log.id,
-        exercise_id:    s.exercise_id,
-        exercise_name:  s.exercise_name,
-        set_number:     s.set_number,
-        weight_kg:      s.weight_kg ?? null,
-        reps:           s.reps ?? null,
-        completed:      s.completed,
-        logged_at:      s.logged_at || new Date().toISOString(),
+        workout_log_id:      log.id,
+        exercise_id:         s.exercise_id,
+        exercise_name:       s.exercise_name,
+        set_number:          s.set_number,
+        weight_kg:           s.weight_kg ?? null,
+        reps:                s.reps ?? null,
+        completed:           s.completed,
+        logged_at:           s.logged_at || new Date().toISOString(),
+        rest_target_seconds: s.rest_target_seconds ?? null,
+        rest_actual_seconds: s.rest_actual_seconds ?? null,
       }))
     )
     if (setsError) {
