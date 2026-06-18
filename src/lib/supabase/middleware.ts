@@ -1,6 +1,8 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
+const GRACE_PERIOD_DAYS = 7
+
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
 
@@ -33,6 +35,10 @@ export async function updateSession(request: NextRequest) {
 
   const isApiRoute = request.nextUrl.pathname.startsWith('/api')
 
+  // Routes always allowed even when locked out for unconfirmed email past grace period
+  const isVerifyRoute  = request.nextUrl.pathname.startsWith('/verify-email')
+  const isAccountRoute = request.nextUrl.pathname.startsWith('/account')
+
   // Redirect unauthenticated users to login (skip API routes)
   if (!user && !isAuthRoute && !isApiRoute) {
     const url = request.nextUrl.clone()
@@ -45,6 +51,21 @@ export async function updateSession(request: NextRequest) {
     const url = request.nextUrl.clone()
     url.pathname = '/dashboard'
     return NextResponse.redirect(url)
+  }
+
+  // ── 7-day email confirmation grace period ──────────────────────────────
+  // After signup the user can use the app immediately. If they still haven't
+  // confirmed their email after GRACE_PERIOD_DAYS, block further app access
+  // (except account settings and the verify-email page) until they confirm.
+  if (user && !user.email_confirmed_at && !isApiRoute && !isAuthRoute && !isVerifyRoute && !isAccountRoute) {
+    const createdAt = new Date(user.created_at).getTime()
+    const daysSinceSignup = (Date.now() - createdAt) / (1000 * 60 * 60 * 24)
+
+    if (daysSinceSignup > GRACE_PERIOD_DAYS) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/verify-email'
+      return NextResponse.redirect(url)
+    }
   }
 
   return supabaseResponse

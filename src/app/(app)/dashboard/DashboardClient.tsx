@@ -5,6 +5,7 @@ import type { UserProfile, DailyNutritionSummary, BodyMetric } from '@/lib/types
 import { computeRollingAverage } from '@/lib/utils/metrics'
 import Link from 'next/link'
 import TimezoneSync from './TimezoneSync'
+import EmailConfirmBanner from './EmailConfirmBanner'
 
 interface SessionExercise {
   id: string; order_index: number; target_sets: number
@@ -25,6 +26,7 @@ interface HabitStatus {
 interface Props {
   profile: Partial<UserProfile> | null
   emailConfirmed: boolean
+  userEmail: string
   todayNutrition: DailyNutritionSummary | null
   recentWeights: Pick<BodyMetric, 'weight_kg' | 'logged_at'>[]
   latestCheckin: { explanation: string; created_at: string } | null
@@ -72,7 +74,7 @@ function MacroBar({ label, eaten, target, color }: { label: string; eaten: numbe
 }
 
 export default function DashboardClient({
-  profile, emailConfirmed, todayNutrition, recentWeights,
+  profile, emailConfirmed, userEmail, todayNutrition, recentWeights,
   latestCheckin, activeProgram, todaySession, habits,
   timezone, today,
 }: Props) {
@@ -107,10 +109,8 @@ export default function DashboardClient({
       <TimezoneSync savedTimezone={timezone} />
 
       {/* Email banner */}
-      {!emailConfirmed && (
-        <div style={{ padding: '10px 14px', borderLeft: '2px solid var(--amber)', fontSize: 12, color: 'var(--amber)' }}>
-          Confirm your email — check your inbox.
-        </div>
+      {!emailConfirmed && userEmail && (
+        <EmailConfirmBanner email={userEmail} />
       )}
 
       {/* Header */}
