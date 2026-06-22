@@ -113,7 +113,7 @@ export async function POST(request: NextRequest) {
     }
   }))
 
-  const validItems = resolvedItems.filter(Boolean)
+  const validItems = resolvedItems.filter((x): x is NonNullable<typeof x> => x !== null)
   if (validItems.length > 0) {
     await supabase.from('meal_template_items').insert(validItems)
   }
