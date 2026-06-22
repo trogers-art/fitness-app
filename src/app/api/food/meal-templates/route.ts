@@ -7,8 +7,13 @@ const CreateSchema = z.object({
   description: z.string().max(300).optional(),
   meal_type:   z.enum(['breakfast','lunch','dinner','snack','pre_workout','post_workout']).optional(),
   items: z.array(z.object({
-    food_id:    z.string().uuid(),
-    quantity_g: z.number().min(1).max(5000),
+    food_id:             z.string().uuid(),
+    quantity_g:          z.number().min(1).max(5000),
+    serving_description: z.string().optional(),
+    calories_total:      z.number().optional(),
+    protein_total:       z.number().optional(),
+    carbs_total:         z.number().optional(),
+    fat_total:           z.number().optional(),
   })).min(1),
 })
 
@@ -23,6 +28,7 @@ export async function GET() {
       id, name, description, meal_type, created_at,
       items:meal_template_items (
         id, quantity_g, order_index,
+        serving_description, calories_total, protein_total, carbs_total, fat_total,
         food:foods ( id, name, calories_per_100g, protein_per_100g, carbs_per_100g, fat_per_100g )
       )
     `)
@@ -37,9 +43,9 @@ export async function POST(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const body = await request.json()
+  const body   = await request.json()
   const parsed = CreateSchema.safeParse(body)
-  if (!parsed.success) return NextResponse.json({ error: 'Invalid input' }, { status: 400 })
+  if (!parsed.success) return NextResponse.json({ error: 'Invalid input', details: parsed.error.flatten() }, { status: 400 })
 
   const { name, description, meal_type, items } = parsed.data
 
@@ -53,10 +59,15 @@ export async function POST(request: NextRequest) {
 
   await supabase.from('meal_template_items').insert(
     items.map((item, i) => ({
-      template_id: template.id,
-      food_id:     item.food_id,
-      quantity_g:  item.quantity_g,
-      order_index: i,
+      template_id:         template.id,
+      food_id:             item.food_id,
+      quantity_g:          item.quantity_g,
+      order_index:         i,
+      serving_description: item.serving_description ?? null,
+      calories_total:      item.calories_total       ?? null,
+      protein_total:       item.protein_total        ?? null,
+      carbs_total:         item.carbs_total          ?? null,
+      fat_total:           item.fat_total            ?? null,
     }))
   )
 
