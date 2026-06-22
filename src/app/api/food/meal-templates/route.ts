@@ -7,7 +7,13 @@ const CreateSchema = z.object({
   description: z.string().max(300).optional(),
   meal_type:   z.enum(['breakfast','lunch','dinner','snack','pre_workout','post_workout']).optional(),
   items: z.array(z.object({
-    food_id:             z.string().uuid(),
+    food_id:             z.string().uuid().optional(),
+    food_name:           z.string().optional(),
+    food_brand:          z.string().nullable().optional(),
+    calories_per_100g:   z.number().optional(),
+    protein_per_100g:    z.number().optional(),
+    carbs_per_100g:      z.number().optional(),
+    fat_per_100g:        z.number().optional(),
     quantity_g:          z.number().min(1).max(5000),
     serving_description: z.string().optional(),
     calories_total:      z.number().optional(),
@@ -57,10 +63,46 @@ export async function POST(request: NextRequest) {
 
   if (error || !template) return NextResponse.json({ error: 'Failed to create template' }, { status: 500 })
 
-  await supabase.from('meal_template_items').insert(
-    items.map((item, i) => ({
+  // Resolve food_ids — if no food_id provided, find or create the food in DB
+  const resolvedItems = await Promise.all(items.map(async (item, i) => {
+    let foodId = item.food_id
+
+    if (!foodId && item.food_name && item.calories_per_100g != null) {
+      // Try to find existing food by name
+      const { data: existing } = await supabase
+        .from('foods')
+        .select('id')
+        .ilike('name', item.food_name)
+        .is('user_id', null)
+        .limit(1)
+        .single()
+
+      if (existing) {
+        foodId = existing.id
+      } else {
+        const { data: newFood } = await supabase
+          .from('foods')
+          .insert({
+            name:              item.food_name,
+            brand:             item.food_brand || null,
+            calories_per_100g: item.calories_per_100g,
+            protein_per_100g:  item.protein_per_100g  ?? 0,
+            carbs_per_100g:    item.carbs_per_100g    ?? 0,
+            fat_per_100g:      item.fat_per_100g      ?? 0,
+            source:            'openfoodfacts',
+            user_id:           null,
+          })
+          .select('id')
+          .single()
+        if (newFood) foodId = newFood.id
+      }
+    }
+
+    if (!foodId) return null
+
+    return {
       template_id:         template.id,
-      food_id:             item.food_id,
+      food_id:             foodId,
       quantity_g:          item.quantity_g,
       order_index:         i,
       serving_description: item.serving_description ?? null,
@@ -68,8 +110,13 @@ export async function POST(request: NextRequest) {
       protein_total:       item.protein_total        ?? null,
       carbs_total:         item.carbs_total          ?? null,
       fat_total:           item.fat_total            ?? null,
-    }))
-  )
+    }
+  }))
+
+  const validItems = resolvedItems.filter(Boolean)
+  if (validItems.length > 0) {
+    await supabase.from('meal_template_items').insert(validItems)
+  }
 
   return NextResponse.json({ template_id: template.id })
 }
