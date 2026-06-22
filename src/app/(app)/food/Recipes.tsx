@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
+import FoodPicker, { PickedFood } from './FoodPicker'
 
 type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack' | 'pre_workout' | 'post_workout'
 
@@ -21,6 +22,11 @@ interface FSRecipe {
 interface TemplateItem {
   id: string
   quantity_g: number
+  serving_description: string | null
+  calories_total: number | null
+  protein_total: number | null
+  carbs_total: number | null
+  fat_total: number | null
   food: { id: string; name: string; calories_per_100g: number; protein_per_100g: number; carbs_per_100g: number; fat_per_100g: number }
 }
 
@@ -53,10 +59,10 @@ const S = {
 function FSRecipes() {
   const router = useRouter()
   const [, startTransition] = useTransition()
-  const [query,    setQuery]    = useState('')
-  const [recipes,  setRecipes]  = useState<FSRecipe[]>([])
-  const [loading,  setLoading]  = useState(false)
-  const [logging,  setLogging]  = useState<string | null>(null)
+  const [query,     setQuery]     = useState('')
+  const [recipes,   setRecipes]   = useState<FSRecipe[]>([])
+  const [loading,   setLoading]   = useState(false)
+  const [logging,   setLogging]   = useState<string | null>(null)
   const [logTarget, setLogTarget] = useState<{ recipe: FSRecipe; mealType: MealType } | null>(null)
   const searchRef = useRef<ReturnType<typeof setTimeout>>()
 
@@ -64,7 +70,7 @@ function FSRecipes() {
     clearTimeout(searchRef.current)
     setLoading(true)
     searchRef.current = setTimeout(async () => {
-      const res = await fetch(`/api/food/recipes?q=${encodeURIComponent(query)}`, { credentials: 'include' })
+      const res  = await fetch(`/api/food/recipes?q=${encodeURIComponent(query)}`, { credentials: 'include' })
       const data = await res.json()
       setRecipes(data.recipes || [])
       setLoading(false)
@@ -73,7 +79,6 @@ function FSRecipes() {
 
   async function handleLogRecipe(recipe: FSRecipe, mealType: MealType) {
     setLogging(recipe.id)
-    // Log recipe as a custom food entry (total macros)
     await fetch('/api/food/entries', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -87,7 +92,7 @@ function FSRecipes() {
           fat_per_100g:      recipe.fat,
           source:            'custom',
         },
-        meal_type: mealType,
+        meal_type:  mealType,
         quantity_g: 100,
       }),
     })
@@ -124,7 +129,6 @@ function FSRecipes() {
               </div>
             </div>
 
-            {/* Meal type picker */}
             {logTarget?.recipe.id === recipe.id ? (
               <div style={{ marginTop: 12 }}>
                 <p style={{ ...S.lbl, marginBottom: 8 }}>Add to meal</p>
@@ -164,15 +168,22 @@ function FSRecipes() {
 function MealTemplates() {
   const router = useRouter()
   const [, startTransition] = useTransition()
-  const [templates,   setTemplates]   = useState<Template[]>([])
-  const [creating,    setCreating]    = useState(false)
-  const [logging,     setLogging]     = useState<string | null>(null)
-  const [logTarget,   setLogTarget]   = useState<{ id: string } | null>(null)
-  const [newTemplate, setNewTemplate] = useState({ name: '', description: '', meal_type: '' as MealType | '' })
-  const [newItems,    setNewItems]    = useState<{ food_id: string; food_name: string; quantity_g: number }[]>([])
-  const [foodQuery,   setFoodQuery]   = useState('')
-  const [foodResults, setFoodResults] = useState<any[]>([])
-  const searchRef = useRef<ReturnType<typeof setTimeout>>()
+  const [templates,    setTemplates]    = useState<Template[]>([])
+  const [creating,     setCreating]     = useState(false)
+  const [logging,      setLogging]      = useState<string | null>(null)
+  const [logTarget,    setLogTarget]    = useState<{ id: string } | null>(null)
+  const [showPicker,   setShowPicker]   = useState(false)
+  const [newTemplate,  setNewTemplate]  = useState({ name: '', description: '', meal_type: '' as MealType | '' })
+  const [newItems,     setNewItems]     = useState<{
+    food_id: string
+    food_name: string
+    quantity_g: number
+    serving_description: string
+    calories_total: number
+    protein_total: number
+    carbs_total: number
+    fat_total: number
+  }[]>([])
 
   useEffect(() => {
     fetch('/api/food/meal-templates', { credentials: 'include' })
@@ -180,18 +191,17 @@ function MealTemplates() {
       .then(d => setTemplates(d.templates || []))
   }, [])
 
-  useEffect(() => {
-    if (foodQuery.length < 2) { setFoodResults([]); return }
-    clearTimeout(searchRef.current)
-    searchRef.current = setTimeout(async () => {
-      const res = await fetch(`/api/food/search?q=${encodeURIComponent(foodQuery)}`, { credentials: 'include' })
-      const data = await res.json()
-      setFoodResults(data.foods || [])
-    }, 300)
-  }, [foodQuery])
-
   function calcTemplateTotals(items: TemplateItem[]) {
     return items.reduce((acc, item) => {
+      // Use stored totals if available (rich data), fall back to per-100g calc
+      if (item.calories_total != null) {
+        return {
+          calories: acc.calories + item.calories_total,
+          protein:  acc.protein  + (item.protein_total || 0),
+          carbs:    acc.carbs    + (item.carbs_total   || 0),
+          fat:      acc.fat      + (item.fat_total     || 0),
+        }
+      }
       const f = item.quantity_g / 100
       return {
         calories: acc.calories + Math.round(item.food.calories_per_100g * f),
@@ -200,6 +210,20 @@ function MealTemplates() {
         fat:      acc.fat      + Math.round(item.food.fat_per_100g      * f * 10) / 10,
       }
     }, { calories: 0, protein: 0, carbs: 0, fat: 0 })
+  }
+
+  function handleFoodPicked(picked: PickedFood) {
+    setNewItems(prev => [...prev, {
+      food_id:             (picked.food as any).id || '',
+      food_name:           picked.food.name,
+      quantity_g:          picked.quantity_g,
+      serving_description: picked.serving_description,
+      calories_total:      picked.calories_total,
+      protein_total:       picked.protein_total,
+      carbs_total:         picked.carbs_total,
+      fat_total:           picked.fat_total,
+    }])
+    setShowPicker(false)
   }
 
   async function handleSaveTemplate() {
@@ -212,10 +236,17 @@ function MealTemplates() {
         name:      newTemplate.name,
         description: newTemplate.description || undefined,
         meal_type: newTemplate.meal_type || undefined,
-        items:     newItems.map(i => ({ food_id: i.food_id, quantity_g: i.quantity_g })),
+        items:     newItems.map(i => ({
+          food_id:             i.food_id,
+          quantity_g:          i.quantity_g,
+          serving_description: i.serving_description,
+          calories_total:      i.calories_total,
+          protein_total:       i.protein_total,
+          carbs_total:         i.carbs_total,
+          fat_total:           i.fat_total,
+        })),
       }),
     })
-    // Refresh templates
     const res = await fetch('/api/food/meal-templates', { credentials: 'include' })
     const data = await res.json()
     setTemplates(data.templates || [])
@@ -242,6 +273,13 @@ function MealTemplates() {
     setTemplates(t => t.filter(x => x.id !== id))
   }
 
+  const newItemsTotals = newItems.reduce((acc, i) => ({
+    calories: acc.calories + i.calories_total,
+    protein:  acc.protein  + i.protein_total,
+    carbs:    acc.carbs    + i.carbs_total,
+    fat:      acc.fat      + i.fat_total,
+  }), { calories: 0, protein: 0, carbs: 0, fat: 0 })
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -252,7 +290,6 @@ function MealTemplates() {
         </button>
       </div>
 
-      {/* Template list */}
       {templates.map(t => {
         const totals = calcTemplateTotals(t.items)
         return (
@@ -264,30 +301,27 @@ function MealTemplates() {
                   style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-3)', padding: 0 }}
                   onMouseEnter={e => (e.currentTarget.style.color = 'var(--red)')}
                   onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-3)')}>
-                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                    <path d="M1 1l10 10M11 1L1 11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="square"/>
-                  </svg>
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M1 1l10 10M11 1L1 11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="square"/></svg>
                 </button>
               </div>
 
-              {/* Items */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 3, marginBottom: 10 }}>
                 {t.items.map(item => (
                   <p key={item.id} style={{ fontSize: 11, color: 'var(--text-3)', margin: 0, fontFamily: 'DM Mono, monospace' }}>
-                    {item.food.name} <span style={{ color: 'var(--text-3)' }}>— {item.quantity_g}g</span>
+                    {item.food.name}
+                    <span style={{ color: 'var(--text-3)' }}> — {item.serving_description || `${item.quantity_g}g`}</span>
+                    {item.calories_total != null && <span style={{ color: 'var(--text-3)' }}> · {item.calories_total} kcal</span>}
                   </p>
                 ))}
               </div>
 
-              {/* Totals */}
               <div style={{ display: 'flex', gap: 14, fontSize: 10, fontFamily: 'DM Mono, monospace', color: 'var(--text-3)', marginBottom: 12 }}>
-                <span><b style={{ color: 'var(--text-2)' }}>{totals.calories}</b> kcal</span>
-                <span><b style={{ color: 'var(--blue)' }}>{totals.protein}g</b> protein</span>
-                <span><b style={{ color: 'var(--amber)' }}>{totals.carbs}g</b> carbs</span>
-                <span><b style={{ color: 'var(--red)' }}>{totals.fat}g</b> fat</span>
+                <span><b style={{ color: 'var(--text-2)' }}>{Math.round(totals.calories)}</b> kcal</span>
+                <span><b style={{ color: 'var(--blue)' }}>{Math.round(totals.protein * 10) / 10}g</b> protein</span>
+                <span><b style={{ color: 'var(--amber)' }}>{Math.round(totals.carbs * 10) / 10}g</b> carbs</span>
+                <span><b style={{ color: 'var(--red)' }}>{Math.round(totals.fat * 10) / 10}g</b> fat</span>
               </div>
 
-              {/* Log */}
               {logTarget?.id === t.id ? (
                 <div>
                   <p style={{ ...S.lbl, marginBottom: 8 }}>Add to meal</p>
@@ -306,8 +340,7 @@ function MealTemplates() {
                   </div>
                 </div>
               ) : (
-                <button onClick={() => setLogTarget({ id: t.id })}
-                  disabled={!!logging}
+                <button onClick={() => setLogTarget({ id: t.id })} disabled={!!logging}
                   style={{ padding: '7px 14px', fontSize: 11, fontWeight: 600, background: 'var(--btn-bg)', color: 'var(--btn-fg)', border: 'none', cursor: 'pointer', fontFamily: 'DM Sans, sans-serif', opacity: logging === t.id ? 0.5 : 1 }}>
                   {logging === t.id ? 'Logging...' : 'Log meal'}
                 </button>
@@ -345,52 +378,52 @@ function MealTemplates() {
               </div>
             </div>
 
-            {/* Food items */}
-            <div>
-              <label style={{ ...S.lbl, marginBottom: 6 }}>Foods</label>
-              {newItems.map((item, i) => (
-                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                  <span style={{ flex: 1, fontSize: 12, color: 'var(--text)' }}>{item.food_name}</span>
-                  <input type="number" min={1} value={item.quantity_g}
-                    onChange={e => setNewItems(prev => prev.map((x, j) => j === i ? { ...x, quantity_g: parseFloat(e.target.value) } : x))}
-                    style={{ ...S.input, width: 80, padding: '6px 8px' }} />
-                  <span style={{ fontSize: 10, color: 'var(--text-3)' }}>g</span>
-                  <button onClick={() => setNewItems(prev => prev.filter((_, j) => j !== i))}
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-3)', padding: 4 }}>
-                    <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-                      <path d="M1 1l8 8M9 1L1 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="square"/>
-                    </svg>
-                  </button>
-                </div>
-              ))}
-
-              {/* Food search */}
-              <input style={{ ...S.input, marginTop: 6 }} type="text" placeholder="Search to add food..."
-                value={foodQuery} onChange={e => setFoodQuery(e.target.value)} />
-              {foodResults.length > 0 && (
-                <div style={{ border: '1px solid var(--border)', marginTop: 4 }}>
-                  {foodResults.slice(0, 6).map((food: any, i: number) => (
-                    <button key={food.id || i}
-                      onClick={() => {
-                        setNewItems(prev => [...prev, { food_id: food.id, food_name: food.name, quantity_g: food.serving_size_g || 100 }])
-                        setFoodQuery('')
-                        setFoodResults([])
-                      }}
-                      style={{ width: '100%', textAlign: 'left', padding: '8px 12px', background: 'none', border: 'none', borderBottom: i < Math.min(foodResults.length, 6) - 1 ? '1px solid var(--border)' : 'none', cursor: 'pointer', fontFamily: 'DM Sans, sans-serif' }}
-                      onMouseEnter={e => (e.currentTarget.style.background = 'var(--surface-2)')}
-                      onMouseLeave={e => (e.currentTarget.style.background = 'none')}>
-                      <p style={{ fontSize: 12, color: 'var(--text)', margin: 0 }}>{food.name}</p>
-                      <p style={{ fontSize: 10, color: 'var(--text-3)', margin: 0, fontFamily: 'DM Mono, monospace' }}>
-                        {food.calories_per_100g} kcal/100g
+            {/* Food items list */}
+            {newItems.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <label style={{ ...S.lbl, marginBottom: 2 }}>Foods</label>
+                {newItems.map((item, i) => (
+                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', background: 'var(--surface-2)', border: '1px solid var(--border-2)' }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ fontSize: 12, color: 'var(--text)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.food_name}</p>
+                      <p style={{ fontSize: 10, color: 'var(--text-3)', margin: '1px 0 0', fontFamily: 'DM Mono, monospace' }}>
+                        {item.serving_description} · {item.calories_total} kcal
                       </p>
+                    </div>
+                    <button onClick={() => setNewItems(prev => prev.filter((_, j) => j !== i))}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-3)', padding: 4, flexShrink: 0 }}
+                      onMouseEnter={e => (e.currentTarget.style.color = 'var(--red)')}
+                      onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-3)')}>
+                      <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M1 1l8 8M9 1L1 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="square"/></svg>
                     </button>
-                  ))}
+                  </div>
+                ))}
+                <div style={{ fontSize: 10, fontFamily: 'DM Mono, monospace', color: 'var(--text-3)', padding: '4px 0' }}>
+                  Total: {Math.round(newItemsTotals.calories)} kcal · {Math.round(newItemsTotals.protein * 10) / 10}p · {Math.round(newItemsTotals.carbs * 10) / 10}c · {Math.round(newItemsTotals.fat * 10) / 10}f
                 </div>
-              )}
-            </div>
+              </div>
+            )}
+
+            {/* FoodPicker inline or trigger */}
+            {showPicker ? (
+              <div style={{ border: '1px solid var(--border)', padding: 12 }}>
+                <FoodPicker
+                  onPicked={handleFoodPicked}
+                  onCancel={() => setShowPicker(false)}
+                  confirmLabel="Add to template"
+                />
+              </div>
+            ) : (
+              <button onClick={() => setShowPicker(true)}
+                style={{ padding: '9px 14px', fontSize: 11, background: 'none', border: '1px solid var(--border-2)', color: 'var(--text-2)', cursor: 'pointer', fontFamily: 'DM Sans, sans-serif', textAlign: 'left' }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--text)'; e.currentTarget.style.color = 'var(--text)' }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-2)'; e.currentTarget.style.color = 'var(--text-2)' }}>
+                + Add food
+              </button>
+            )}
 
             <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
-              <button onClick={() => { setCreating(false); setNewItems([]); setNewTemplate({ name: '', description: '', meal_type: '' }) }}
+              <button onClick={() => { setCreating(false); setNewItems([]); setNewTemplate({ name: '', description: '', meal_type: '' }); setShowPicker(false) }}
                 style={{ flex: 1, padding: '10px', fontSize: 12, background: 'var(--surface-2)', color: 'var(--text)', border: '1px solid var(--border-2)', cursor: 'pointer', fontFamily: 'DM Sans, sans-serif' }}>
                 Cancel
               </button>
@@ -412,7 +445,6 @@ type RecipeTab = 'templates' | 'discover'
 
 export default function Recipes() {
   const [tab, setTab] = useState<RecipeTab>('templates')
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       <div style={{ display: 'flex', borderBottom: '1px solid var(--border)' }}>
@@ -426,7 +458,6 @@ export default function Recipes() {
           }}>{label}</button>
         ))}
       </div>
-
       {tab === 'templates' ? <MealTemplates /> : <FSRecipes />}
     </div>
   )
