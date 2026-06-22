@@ -175,8 +175,13 @@ function MealTemplates() {
   const [showPicker,   setShowPicker]   = useState(false)
   const [newTemplate,  setNewTemplate]  = useState({ name: '', description: '', meal_type: '' as MealType | '' })
   const [newItems,     setNewItems]     = useState<{
-    food_id: string
+    food_id?: string
     food_name: string
+    food_brand?: string | null
+    calories_per_100g?: number
+    protein_per_100g?: number
+    carbs_per_100g?: number
+    fat_per_100g?: number
     quantity_g: number
     serving_description: string
     calories_total: number
@@ -214,8 +219,13 @@ function MealTemplates() {
 
   function handleFoodPicked(picked: PickedFood) {
     setNewItems(prev => [...prev, {
-      food_id:             (picked.food as any).id || '',
-      food_name:           picked.food.name,
+      food_id:             picked.food_id || undefined,
+      food_name:           picked.food_name,
+      food_brand:          picked.food_brand,
+      calories_per_100g:   picked.calories_per_100g,
+      protein_per_100g:    picked.protein_per_100g,
+      carbs_per_100g:      picked.carbs_per_100g,
+      fat_per_100g:        picked.fat_per_100g,
       quantity_g:          picked.quantity_g,
       serving_description: picked.serving_description,
       calories_total:      picked.calories_total,
@@ -238,6 +248,12 @@ function MealTemplates() {
         meal_type: newTemplate.meal_type || undefined,
         items:     newItems.map(i => ({
           food_id:             i.food_id,
+          food_name:           i.food_name,
+          food_brand:          i.food_brand,
+          calories_per_100g:   i.calories_per_100g,
+          protein_per_100g:    i.protein_per_100g,
+          carbs_per_100g:      i.carbs_per_100g,
+          fat_per_100g:        i.fat_per_100g,
           quantity_g:          i.quantity_g,
           serving_description: i.serving_description,
           calories_total:      i.calories_total,

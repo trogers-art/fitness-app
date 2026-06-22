@@ -43,6 +43,14 @@ export interface PickedFood {
   protein_total:       number
   carbs_total:         number
   fat_total:           number
+  // For server-side food resolution when no DB id exists
+  food_id?:            string
+  food_name:           string
+  food_brand:          string | null
+  calories_per_100g:   number
+  protein_per_100g:    number
+  carbs_per_100g:      number
+  fat_per_100g:        number
 }
 
 interface Props {
@@ -136,6 +144,16 @@ export default function FoodPicker({ onPicked, onCancel, confirmLabel = 'Add foo
     const sq  = Math.max(0, parseFloat(servingQty) || 1)
     const cq  = parseFloat(customQty) || 100
 
+    const foodMeta = {
+      food_id:           (selected as any).id || undefined,
+      food_name:         selected.name,
+      food_brand:        selected.brand,
+      calories_per_100g: selected.calories_per_100g,
+      protein_per_100g:  selected.protein_per_100g,
+      carbs_per_100g:    selected.carbs_per_100g,
+      fat_per_100g:      selected.fat_per_100g,
+    }
+
     let picked: PickedFood
     if (serving) {
       picked = {
@@ -149,6 +167,7 @@ export default function FoodPicker({ onPicked, onCancel, confirmLabel = 'Add foo
         protein_total:       Math.round(serving.protein  * sq * 10) / 10,
         carbs_total:         Math.round(serving.carbs    * sq * 10) / 10,
         fat_total:           Math.round(serving.fat      * sq * 10) / 10,
+        ...foodMeta,
       }
     } else {
       const f = cq / 100
@@ -163,6 +182,7 @@ export default function FoodPicker({ onPicked, onCancel, confirmLabel = 'Add foo
         protein_total:       Math.round(selected.protein_per_100g  * f * 10) / 10,
         carbs_total:         Math.round(selected.carbs_per_100g    * f * 10) / 10,
         fat_total:           Math.round(selected.fat_per_100g      * f * 10) / 10,
+        ...foodMeta,
       }
     }
     onPicked(picked)
